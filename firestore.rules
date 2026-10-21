@@ -1,0 +1,461 @@
+rules_version = '2';
+
+// =====================================================================
+// GESTIÓNPRO POS — REGLAS DE FIRESTORE
+// FASE 1 — "cerrar la puerta"
+// ---------------------------------------------------------------------
+// Reemplaza por completo al archivo anterior (respaldo en
+// firestore.rules.original.backup).
+//
+// Publicar en: Firebase Console > Firestore Database > Reglas > Publicar
+//
+// ---------------------------------------------------------------------
+// QUÉ CIERRA ESTE ARCHIVO
+// ---------------------------------------------------------------------
+//  1. AISLAMIENTO POR INQUILINO. Cada colección operativa exige que el
+//     negocioId del llamante coincida con el negocioId de la ruta. Antes
+//     bastaba con estar autenticado para LEER Y ESCRIBIR los datos de
+//     CUALQUIER bodega (ventas, clientes, deudas, gastos, precios).
+//  2. AUTOASCENSO DE ROL. `usuarios/{uid}` ya no permite que un cajero se
+//     escriba role:'admin' a sí mismo, ni que nadie edite la cuenta de
+//     otro usuario.
+//  3. Se ELIMINA la colección legacy `users/{email}`, que era escribible
+//     por cualquier autenticado y concedía admin a través del respaldo de
+//     login de app.js:159-162.
+//  4. Se ELIMINA el catch-all `match /{collection}/{docId}`, que dejaba
+//     abierta cualquier colección no prevista.
+//  5. Un cajero ya no puede reescribir nombre / RIF / logo / nroControl
+//     del negocio. Eso cierra el vector de XSS almacenado vía
+//     settings.storeName (app.js:259 y app.js:937, que se pintan con
+//     innerHTML al iniciar sesión, para admin Y cajero).
+//  6. VALIDACIÓN DE FORMA en ventas, clientes, gastos, mermas y abonos:
+//     totales no negativos, importes numéricos y acotados, listas de
+//     artículos no vacías. Antes se podía escribir una venta con
+//     totalUsd: 0.01 y las reglas la aceptaban.
+//
+// ---------------------------------------------------------------------
+// NO PUBLICAR TODAVÍA SI NO SE CUMPLEN ESTOS 3 REQUISITOS
+// ---------------------------------------------------------------------
+//  R1. TODO usuario real debe tener su documento `usuarios/{uid}` con los
+//      campos `negocioId` y `role` ANTES de publicar. Sin ese documento,
+//      las reglas no pueden resolver el inquilino y el usuario queda
+//      fuera. Verificar en la consola:
+//        Firestore > usuarios  (debe haber un doc por cada cuenta de
+//        Authentication, con negocioId y role != null)
+//  R2. Aplicar PATCH A (ver README al final): el alta de negocios escribe
+//      en Firestore ANTES de iniciar sesión en la app primaria, así que
+//      hoy se rechaza con permission-denied. Con estas reglas sigue
+//      rechazándose (ya estaba roto); el parche lo arregla.
+//  R3. Confirmar que el catálogo web (catalogo.html) sigue funcionando:
+//      estas reglas mantienen `products` y `settings` como lectura
+//      pública, así que NO se rompe. La fuga de `costo` se cierra en la
+//      FASE 2 (ver README), porque Firestore no permite ocultar campos
+//      en lectura.
+// =====================================================================
+
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =================================================================
+    // HELPERS
+    // =================================================================
+
+    function signedIn() { return request.auth != null; }
+    function uid()      { return request.auth.uid; }
+
+    // Perfil del llamante. NUNCA invocar sin comprobar signedIn() antes:
+    // las reglas evalúan && y || en cortocircuito, así que el guardia
+    // siempre va primero.
+    function perfil()    { return get(/databases/$(database)/documents/usuarios/$(uid())).data; }
+    function miNegocio() { return perfil().negocioId; }
+    function esAdmin()   { return perfil().role == 'admin'; }
+
+    function esMiembro(negocioId) {
+      return signedIn() && miNegocio() == negocioId;
+    }
+
+    function esAdminDe(negocioId) {
+      return signedIn() && miNegocio() == negocioId && esAdmin();
+    }
+
+    // Claves modificadas por esta escritura. Solo válido en update
+    // (necesita `resource.data`, que es el documento ya guardado).
+    function cambiados() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // =================================================================
+    // VALIDACIÓN DE FORMA
+    // Nota: en un update, `request.resource.data` es el documento
+    // COMPLETO después de la escritura, así que estas comprobaciones
+    // también protegen las actualizaciones parciales.
+    // =================================================================
+
+    function ventaValida() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['nroFactura', 'items', 'subtotalUsd', 'totalUsd', 'tasaBCV', 'cajero', 'status'])
+        && d.nroFactura is int && d.nroFactura > 0 && d.nroFactura < 100000000
+        && d.subtotalUsd is number && d.subtotalUsd >= 0 && d.subtotalUsd <= 1000000
+        && d.totalUsd is number && d.totalUsd >= 0 && d.totalUsd <= 1000000
+        && d.tasaBCV is number && d.tasaBCV > 0 && d.tasaBCV <= 1000000
+        && d.cajero is string && d.cajero.size() > 0 && d.cajero.size() <= 320
+        && d.status in ['abierto', 'cerrado', 'anulada']
+        && d.items is list && d.items.size() > 0 && d.items.size() <= 300;
+    }
+
+    // Se validan TIPOS y RANGOS de los campos presentes, en vez de exigir
+    // campos: así un cliente antiguo sin `nombre` no bloquea las ventas que le
+    // incrementan la deuda. Lo que sí se impide es inyectar valores no
+    // numéricos o absurdos.
+    //
+    // El rango permite negativos A PROPÓSITO. Los saldos se mueven con
+    // FieldValue.increment() calculado sobre la caché local del cliente, así
+    // que con una caché desactualizada el resultado puede quedar en negativo.
+    // Si aquí se exigiera >= 0, esa carrera denegaría el lote COMPLETO y
+    // tumbaría la venta: es peor romper una venta que tolerar un saldo
+    // negativo transitorio. La corrección de raíz es mover el cálculo a una
+    // transacción en servidor (ver FASE 2, al final del archivo).
+    function clienteValido() {
+      let d = request.resource.data;
+      return (!('nombre' in d.keys())        || (d.nombre is string && d.nombre.size() <= 200))
+        && (!('deudaUsd' in d.keys())        || (d.deudaUsd is number && d.deudaUsd >= -1000000 && d.deudaUsd <= 1000000))
+        && (!('saldoFavorUsd' in d.keys())   || (d.saldoFavorUsd is number && d.saldoFavorUsd >= -1000000 && d.saldoFavorUsd <= 1000000))
+        && (!('puntos' in d.keys())          || (d.puntos is number && d.puntos >= -1000000 && d.puntos <= 100000000));
+    }
+
+    function gastoValido() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['concepto', 'montoUsd'])
+        && d.concepto is string && d.concepto.size() > 0 && d.concepto.size() <= 300
+        && d.montoUsd is number && d.montoUsd >= 0 && d.montoUsd <= 1000000;
+    }
+
+    function abonoValido() {
+      let d = request.resource.data;
+      return d.montoUsd is number && d.montoUsd > 0 && d.montoUsd <= 1000000;
+    }
+
+    // Se usa >= 0 a propósito: guardarMerma (app.js:4053) no tiene .catch(),
+    // así que una denegación aquí sería un fallo mudo (la merma no se
+    // registra y el usuario no se entera). El valor ya se valida en la UI.
+    function mermaValida() {
+      let d = request.resource.data;
+      return (!('mermaKg' in d.keys()) || (d.mermaKg is number && d.mermaKg >= 0 && d.mermaKg <= 1000000))
+        && (!('kilosPerdidos' in d.keys()) || (d.kilosPerdidos is number && d.kilosPerdidos >= 0 && d.kilosPerdidos <= 1000000));
+    }
+
+
+    // =================================================================
+    // USUARIOS  (perfil: negocioId + role)
+    // =================================================================
+    match /usuarios/{userId} {
+
+      allow get: if signedIn() && (
+        uid() == userId
+        || esAdminDe(resource.data.negocioId)
+      );
+
+      // La app lista con .where('negocioId','==', currentNegocioId). Las
+      // reglas de Firestore NO permiten inspeccionar el contenido del
+      // where, así que un admin podría consultar sin filtro y ver los
+      // perfiles de otros inquilinos (email, role, negocioId). Es una
+      // fuga residual conocida; se elimina en FASE 2 moviendo el personal
+      // a la subcolección negocios/{negocioId}/usuarios/{uid}.
+      allow list: if signedIn() && esAdmin();
+
+      allow create: if signedIn() && (
+        // (a) Alta de negocio propio: creo mi perfil admin para un negocio
+        //     que YO acabo de crear. getAfter() ve el negocio escrito en
+        //     el mismo batch (por eso el PATCH A usa writeBatch).
+        (
+          uid() == userId
+          && request.resource.data.role == 'admin'
+          && request.resource.data.negocioId is string
+          && request.resource.data.negocioId.size() >= 6
+          && request.resource.data.negocioId.size() <= 128
+          && getAfter(/databases/$(database)/documents/negocios/$(request.resource.data.negocioId)).data.ownerId == uid()
+        )
+        // (b) Alta de personal por un admin del mismo negocio.
+        || (
+          esAdminDe(request.resource.data.negocioId)
+          && request.resource.data.role in ['admin', 'cajero']
+        )
+      );
+
+      // Nadie cambia su propio rol ni su propio negocio. Un admin sí
+      // puede editar los perfiles de SU negocio.
+      allow update: if signedIn() && (
+        (
+          uid() == userId
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.negocioId == resource.data.negocioId
+        )
+        || esAdminDe(resource.data.negocioId)
+      );
+
+      // El borrado del PERFIL lo hace el dueño de su negocio (o el propio
+      // usuario). deleteUserDoc() en app.js:4593 tiene el botón en la pestaña
+      // de Usuarios, que es solo para administradores, y ahora además
+      // comprueba isAdmin: sin esta regla el botón fallaba en silencio con
+      // permission-denied.
+      //
+      // OJO: borrar este documento NO deshabilita la cuenta de Firebase Auth
+      // (el usuario existe, pero ya no puede resolver su sesión y recibe
+      // "Acceso denegado"). Para revocarla del todo hay que deshabilitarla
+      // desde el Admin SDK o la consola (ver README, R4).
+      allow delete: if signedIn() && (
+        uid() == userId
+        || esAdminDe(resource.data.negocioId)
+      );
+    }
+
+    // NOTA: `users/{email}` (colección legacy) se elimina a propósito.
+    // Era escribible por cualquier autenticado y concedía admin.
+
+
+    // =================================================================
+    // NEGOCIOS  (raíz del inquilino)
+    // =================================================================
+    match /negocios/{negocioId} {
+
+      allow get:    if esMiembro(negocioId);
+      allow list:   if false;   // la app nunca lista negocios
+      allow create: if signedIn() && request.resource.data.ownerId == uid();
+      allow update: if esAdminDe(negocioId);
+      allow delete: if false;
+
+      // ---------------------------------------------------------------
+      // PRODUCTOS
+      // Lectura pública: la necesita el catálogo web (catalogo.html:367).
+      // OJO: Firestore NO permite ocultar campos en lectura, así que
+      // `costo` y `stock` siguen siendo consultables por la API pública.
+      // Se cierra en FASE 2 con una colección de proyección pública.
+      // ---------------------------------------------------------------
+      match /products/{productId} {
+        allow read: if true;
+
+        allow create, delete: if esAdminDe(negocioId);
+
+        // El cajero solo puede mover `stock` (venta, merma, anulación) y,
+        // en la impresión de etiquetas (app.js:1511), rellenar un `codigo`
+        // que estaba vacío. No puede tocar precios ni costos.
+        allow update: if esAdminDe(negocioId) || (
+          esMiembro(negocioId)
+          && cambiados().hasOnly(['stock', 'codigo'])
+        );
+      }
+
+      // ---------------------------------------------------------------
+      // CONFIGURACIÓN
+      // Lectura pública: el catálogo web usa storeName, storeRif,
+      // storeLogo y storePhone (catalogo.html:346-356).
+      // ---------------------------------------------------------------
+      match /settings/{docId} {
+        allow read: if true;
+
+        allow create: if esMiembro(negocioId);
+
+        // Un cajero SOLO puede escribir nroFactura, porque lo necesita al
+        // confirmar cada venta (app.js:2914 y app.js:521). Todo lo demás
+        // (nombre, RIF, logo, teléfono, nroControl, tasaManual) queda
+        // reservado al dueño. Esto cierra de raíz el XSS almacenado.
+        allow update: if esAdminDe(negocioId) || (
+          esMiembro(negocioId)
+          && cambiados().hasOnly(['nroFactura'])
+        );
+
+        allow delete: if false;
+      }
+
+      // ---------------------------------------------------------------
+      // VENTAS
+      // ---------------------------------------------------------------
+      match /sales/{saleId} {
+        // Todo miembro lee las ventas de SU negocio: la app necesita el
+        // turno completo para el arqueo / Corte Z y los reportes.
+        allow read: if esMiembro(negocioId);
+
+        allow create: if esMiembro(negocioId) && ventaValida();
+
+        // El cierre de caja marca las ventas como 'cerrado'. Solo esas
+        // dos claves: no se puede reescribir el total de una venta.
+        allow update: if esMiembro(negocioId)
+                      && cambiados().hasOnly(['status', 'idCierre'])
+                      && request.resource.data.status in ['abierto', 'cerrado', 'anulada'];
+
+        // Anular hoy es un borrado físico (app.js:4209).
+        // FASE 2: convertirlo en anulación lógica. Ver README.
+        allow delete: if esAdminDe(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // CLIENTES / FIADOS
+      // ---------------------------------------------------------------
+      match /clientes/{clienteId} {
+        allow read: if esMiembro(negocioId);
+        allow create, update: if esMiembro(negocioId) && clienteValido();
+        allow delete: if esAdminDe(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // GASTOS / CAJA CHICA
+      // ---------------------------------------------------------------
+      match /gastos/{gastoId} {
+        allow read: if esMiembro(negocioId);
+        allow create, update: if esMiembro(negocioId) && gastoValido();
+        allow delete: if esAdminDe(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // MERMAS
+      // La pestaña de mermas es visible para cajeros, así que el borrado
+      // (que devuelve stock) se mantiene para miembros. Si quieres
+      // reservarlo al dueño, cambia a esAdminDe(negocioId) y actualiza
+      // deleteMerma() en app.js:4096.
+      // ---------------------------------------------------------------
+      match /mermas/{mermaId} {
+        allow read: if esMiembro(negocioId);
+        allow create, update: if esMiembro(negocioId) && mermaValida();
+        allow delete: if esMiembro(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // ABONOS
+      // ---------------------------------------------------------------
+      match /abonos/{abonoId} {
+        allow read: if esMiembro(negocioId);
+        allow create, update: if esMiembro(negocioId) && abonoValido();
+        allow delete: if esAdminDe(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // PROVEEDORES
+      // ---------------------------------------------------------------
+      match /proveedores/{provId} {
+        allow read: if esMiembro(negocioId);
+        allow write: if esMiembro(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // ÓRDENES DE COMPRA
+      // ATENCIÓN: las reglas anteriores declaraban `ordenes`, pero el
+      // código escribe en `ordenesCompra` (app.js:5158). Funcionaba solo
+      // por el catch-all. Al eliminarlo hay que declararla aquí o las
+      // compras se rompen.
+      // ---------------------------------------------------------------
+      match /ordenesCompra/{ordenId} {
+        allow read: if esMiembro(negocioId);
+        allow write: if esMiembro(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // CIERRES DE CAJA (Corte Z)
+      // ---------------------------------------------------------------
+      match /cierres/{cierreId} {
+        allow read: if esMiembro(negocioId);
+        allow create: if esMiembro(negocioId);
+        allow update: if esAdminDe(negocioId);
+        allow delete: if esAdminDe(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // PEDIDOS ONLINE (catálogo web)
+      // `create` queda DENEGADO A PROPÓSITO.
+      // catalogo.html:632 escribe SIN autenticar, así que esta función ya
+      // está muerta hoy (el catch-all la rechaza). Abrirla con
+      // `allow write: if true` convertiría el formulario público en un XSS
+      // almacenado en la sesión del dueño, porque
+      // renderPedidosOnlineList (app.js:8042-8119) interpola cliente,
+      // teléfono, dirección y p.id con innerHTML sin escapar, e incluso
+      // mete p.id dentro de una cadena JS en un onclick.
+      // Ruta correcta: Cloud Function + App Check (ver README, FASE 2).
+      // ---------------------------------------------------------------
+      match /pedidos_online/{pedidoId} {
+        allow read:   if esMiembro(negocioId);
+        // app.js:8194 escribe las 3 claves al despachar y app.js:8232 solo
+        // 'estado' al cancelar. Si se restringe a ['estado'] el despacho se
+        // deniega en silencio (el .catch de app.js:8200 solo hace warn).
+        allow update: if esMiembro(negocioId)
+                      && cambiados().hasOnly(['estado', 'completadoEn', 'despachadoPor']);
+        allow create, delete: if false;
+      }
+    }
+
+    // =================================================================
+    // SIN CATCH-ALL.
+    // Cualquier colección no declarada aquí queda DENEGADA por defecto
+    // (Firestore v2 es default-deny). Es lo correcto, pero implica que:
+    //
+    //  - `cajas_sucursales` (nivel raíz, app.js:6631 y app.js:7570)
+    //    sigue denegada, igual que hoy. Su estado de caja vive solo en
+    //    localStorage. No es una regresión, pero la "Torre de Control"
+    //    presenta ese estado como si fuera autoritativo. Movida a
+    //    negocios/{negocioId}/cajas en FASE 2.
+    // =================================================================
+  }
+}
+
+
+// =====================================================================
+// README — ACCIONES EN EL CÓDIGO QUE ACOMPAÑAN A ESTAS REGLAS
+// =====================================================================
+//
+// R1. ANTES DE PUBLICAR: verificar que cada cuenta de Authentication
+//     tenga su documento `usuarios/{uid}` con `negocioId` y `role`.
+//     Si falta alguno, ese usuario pierde el acceso.
+//
+// R2. PATCH A — arreglar el alta de negocios (OBLIGATORIO para que el
+//     registro funcione). Hoy app.js:5119-5133 crea el usuario en
+//     `secondaryAuth`, escribe en Firestore con la app PRIMARIA (todavía
+//     sin sesión -> request.auth == null -> permission-denied) y recién
+//     después hace signInWithEmailAndPassword. Hay que:
+//       a) iniciar sesión PRIMERO en la app primaria,
+//       b) escribir `negocios/{id}` y `usuarios/{uid}` en un SOLO
+//          writeBatch (la rama (a) de la regla usa getAfter(), que solo
+//          ve documentos escritos en el mismo batch),
+//       c) si algo falla, cerrar la sesión creada para no dejar cuentas
+//          huérfanas.
+//
+// R3. Eliminar del cliente las puertas traseras (app.js):
+//       - línea 155-157 y 183: el caso especial `admin@bodega.com`, que
+//         concede admin sobre 'bodega-demo' con solo controlar ese email.
+//       - el literal 'bodega-demo' como inquilino por defecto en las
+//         líneas 156, 161, 179, 182 y 191. Con estas reglas, un usuario
+//         sin `usuarios/{uid}` ya no obtiene acceso, pero el respaldo
+//         sigue leyendo `isAdmin` de localStorage.
+//       - app.js:174-197: nunca derivar `isAdmin` ni `negocioId` de
+//         `localStorage.cached_session`. Limpiar ese blob (y
+//         cached_products / cached_clientes) en cerrarSesion().
+//
+// R4. Borrar un usuario de verdad: `deleteUserDoc` (app.js:4184) solo
+//     borra el documento, la cuenta de Auth sigue activa. Hacerlo desde
+//     el Admin SDK / Cloud Function con:
+//       admin.auth().updateUser(uid, { disabled: true })
+//     Tan importante como eso: `createUser` (app.js:4166) debe pasar por
+//     un backend para no crear cuentas desde el cliente.
+//
+// R5. saveSettings (app.js:5063) NO tiene guarda de admin: con estas
+//     reglas un cajero recibirá "No se pudo guardar". Añadirle
+//     `if (!isAdmin) return Swal.fire(...)` para que el mensaje sea claro.
+//
+// R6. La cola offline (app.js:453-552) hace batch.update() sobre
+//     productos y clientes. Si un producto fue borrado, la regla deniega
+//     y el lote ENTERO falla: la cola se queda bloqueada para siempre.
+//     Cambiar esos `batch.update` por `batch.set(..., { merge: true })` y
+//     trocear en lotes de <=400 escrituras (el límite de Firestore es 500).
+//
+// FASE 2 (cuando R1-R6 estén hechos) — pendiente de escribir:
+//   - Proyección pública del catálogo (products_public / public_profile)
+//     para dejar de exponer `costo`, `stock` y las series fiscales
+//     nroFactura/nroControl a cualquiera que consulte la API.
+//   - `usuarios` a la subcolección negocios/{negocioId}/usuarios/{uid},
+//     para que un admin no pueda listar perfiles de otros inquilinos.
+//   - `cajas_sucursales` a negocios/{negocioId}/cajas.
+//   - Anulación lógica de ventas (status:'anulada' + anuladoPor + motivo)
+//     en lugar de borrado, para conservar la secuencia fiscal.
+//   - Pedidos online por Cloud Function con App Check, y escapado HTML
+//     en el render antes de abrir esa puerta.
+//   - Roles e inquilino en custom claims en vez de get() sobre
+//     usuarios/{uid} (ahorra 1 lectura por evaluación de regla).
+// =====================================================================

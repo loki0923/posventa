@@ -1,0 +1,20 @@
+{
+  "name": "gestionpro-bodegas",
+  "version": "1.0.0",
+  "description": "Sistema POS SaaS Multi-Tenant para Bodegas y Retail",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "bump": "node bump-version.mjs",
+    "deploy:rules": "npx firebase-tools deploy --only firestore:rules --project pos-venta-bodega"
+  },
+  "keywords": [
+    "pos",
+    "saas",
+    "multi-tenant",
+    "offline-first"
+  ],
+  "author": "GestiónPro Team",
+  "license": "ISC"
+}

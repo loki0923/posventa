@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Funciones de ayuda
+    function isAuthenticated() { 
+      return request.auth != null; 
+    }
+    
+    // Usuarios del sistema
+    match /usuarios/{uid} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (request.auth.uid == uid || request.resource.data.negocioId != null);
+      allow delete: if isAuthenticated() && request.auth.uid == uid;
+    }
+    
+    // Compatibilidad legado con colección users
+    match /users/{email} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Negocios y subcolecciones Multi-Tenant
+    match /negocios/{negocioId} {
+      // Información pública de la bodega (nombre, logo) para el catálogo online
+      allow read: if true;
+      allow write: if isAuthenticated();
+      
+      // 1. PRODUCTOS: Lectura pública para el catálogo web y compras por WhatsApp
+      match /products/{productId} {
+        allow read: if true;
+        allow write: if isAuthenticated();
+      }
+      
+      // 2. CONFIGURACIÓN: Lectura pública de nombre, tasas y teléfono para el catálogo web
+      match /settings/{docId} {
+        allow read: if true;
+        allow write: if isAuthenticated();
+      }
+      
+      // 3. COLECCIONES PRIVADAS DEL NEGOCIO (Ventas, Clientes, Gastos, Mermas, Proveedores)
+      // Requieren autenticación del personal del negocio
+      match /sales/{saleId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /clientes/{clienteId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /gastos/{gastoId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /mermas/{mermaId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /abonos/{abonoId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /proveedores/{provId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /ordenes/{ordenId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      match /cierres/{cierreId} {
+        allow read, write: if isAuthenticated();
+      }
+      
+      // Fallback para cualquier otra subcolección operativa interna
+      match /{collection}/{docId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+  }
+}

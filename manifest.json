@@ -1,0 +1,16 @@
+{
+  "name": "GestiónPro Bodega",
+  "short_name": "GestiónPro",
+  "description": "Sistema de Ventas y Punto de Venta para Bodegas",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3514/3514491.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
