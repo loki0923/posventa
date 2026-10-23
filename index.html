@@ -118,6 +118,16 @@
             transform: translateY(0);
         }
 
+        .no-scrollbar::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
@@ -347,9 +357,9 @@
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div id="app-container" class="hidden flex h-full w-full">
-        <aside id="main-sidebar" class="w-20 md:w-64 my-3 ml-3 glass-panel rounded-3xl flex flex-col justify-between hidden md:flex z-10 relative overflow-hidden transition-all duration-300 border border-white/60 dark:border-white/10 shadow-lg">
+        <aside id="main-sidebar" class="w-20 md:w-60 my-2.5 ml-2.5 glass-panel rounded-2xl flex flex-col justify-between hidden md:flex z-10 relative overflow-hidden transition-all duration-300 border border-white/60 dark:border-white/10 shadow-md">
             <div class="absolute -top-24 -left-24 w-48 h-48 bg-primary-500/20 rounded-full blur-3xl pointer-events-none"></div>
-            <div class="overflow-y-auto flex-1 custom-scrollbar">
+            <div class="overflow-y-auto flex-1 no-scrollbar">
                 <div class="p-5 flex items-center justify-center border-b border-slate-200/50 dark:border-slate-800/80">
                     <div class="flex items-center gap-3">
                         <div id="sidebar-store-logo" class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-primary-500/30 min-w-[44px] overflow-hidden"><i class="fa-solid fa-bolt text-lg"></i></div>
@@ -412,7 +422,7 @@
         <!-- Main Area -->
         <main class="flex-1 flex flex-col h-full p-3 md:p-4 overflow-hidden relative">
             <!-- Header Tasas -->
-            <header class="glass-header rounded-2xl md:rounded-full px-4 md:px-6 py-2.5 mb-4 flex justify-between items-center z-20 gap-2 shrink-0 border border-slate-200/80 dark:border-slate-800">
+            <header class="glass-header rounded-2xl px-3.5 md:px-5 py-2 mb-3 flex justify-between items-center z-20 gap-2 shrink-0 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
                 <div class="flex items-center gap-2.5 md:gap-3.5">
                     <button onclick="toggleSidebar()" class="text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hidden md:flex bg-white/80 dark:bg-slate-800/80 w-9 h-9 rounded-full shadow-xs items-center justify-center transition-all active:scale-95 border border-slate-200/60 dark:border-slate-700/60" title="Alternar menú lateral"><i class="fa-solid fa-bars text-xs"></i></button>
                     <button onclick="toggleTheme()" class="bg-white/80 dark:bg-slate-800/80 w-9 h-9 rounded-full shadow-xs flex items-center justify-center transition-all hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 border border-slate-200/60 dark:border-slate-700/60" title="Cambiar tema"><i id="theme-icon" class="fa-solid fa-moon text-slate-600 dark:text-amber-400 text-xs"></i></button>
@@ -608,7 +618,7 @@
                         </div>
                         
                         <!-- Ticket de Venta Column (Auto-adaptable, Sticky y Compacto) -->
-                        <div class="glass-panel rounded-3xl p-4 sm:p-5 flex flex-col self-start sticky top-3 relative overflow-hidden border border-white/80 dark:border-white/10 shadow-lg transition-all duration-300 w-full max-h-[calc(100vh-1.5rem)]">
+                        <div class="glass-panel rounded-2xl p-3.5 sm:p-4 flex flex-col self-start sticky top-2 relative overflow-hidden border border-white/80 dark:border-white/10 shadow-md transition-all duration-300 w-full max-h-[calc(100vh-1.5rem)]">
                             <div class="flex items-center justify-between mb-3 pb-3 border-b border-slate-200/60 dark:border-slate-800/80 shrink-0">
                                 <div class="flex items-center gap-2">
                                     <h3 class="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
