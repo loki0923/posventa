@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v16 · 21/10/2026 · importador inventario excel';
+const APP_VERSION = 'v18.1 · 22/10/2026 · corrección transición login y modo fijo';
 
 function pintarVersionApp() {
     try {
@@ -501,6 +501,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // equipo compartido nunca pinte los datos del usuario anterior.
         loadCachedData();
 
+        if (currentNegocioId && navigator.onLine) {
+            db.collection('negocios').doc(currentNegocioId).get().then(negDoc => {
+                if (negDoc && negDoc.exists) {
+                    const nData = negDoc.data();
+                    const bType = nData.businessType || nData.tipoNegocio;
+                    if (bType) {
+                        storeConfig.businessType = bType;
+                        localStorage.setItem('pos_business_mode', bType);
+                        guardarCache('storeConfig', storeConfig);
+                        initBusinessMode();
+                    }
+                }
+            }).catch(e => console.warn('Carga inicial tipo negocio:', e));
+        }
         document.getElementById('login-container').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
         document.getElementById('user-display').textContent = isAdmin ? 'Admin' : 'Cajero';
@@ -554,6 +568,10 @@ function loadCachedData() {
         const cachedConfig = leerCache('storeConfig');
         if (cachedConfig) {
             storeConfig = cachedConfig;
+            if (storeConfig.businessType) {
+                localStorage.setItem('pos_business_mode', storeConfig.businessType);
+                initBusinessMode();
+            }
             pintarNombreTienda(document.getElementById('sidebar-store-name'), storeConfig.name);
             const rifEl = document.getElementById('sidebar-store-rif');
             if (rifEl) rifEl.textContent = storeConfig.rif ? `RIF: ${storeConfig.rif}` : '';
@@ -1419,6 +1437,10 @@ async function fetchRates() {
             storeConfig.phone = data.storePhone || '';
             storeConfig.nroFactura = data.nroFactura || 1001;
             storeConfig.nroControl = data.nroControl || '00-001001';
+            if (data.businessType || data.tipoNegocio) {
+                storeConfig.businessType = data.businessType || data.tipoNegocio;
+                localStorage.setItem('pos_business_mode', storeConfig.businessType);
+            }
         } else {
             rates.bcv = autoRates.bcv;
             if (navigator.onLine) {
@@ -1435,6 +1457,7 @@ async function fetchRates() {
         // Persistir en caché local (prefijada por uid)
         guardarCache('rates', rates);
         guardarCache('storeConfig', storeConfig);
+        initBusinessMode();
 
         // Sin innerHTML: estas dos asignaciones eran el mejor vector de XSS
         // almacenado del sistema, porque se ejecutan al iniciar sesión tanto
@@ -1516,14 +1539,65 @@ function getVencimientoInfo(fechaVenc) {
         return {
             dias: diffDays,
             status: 'ok',
-            badge: `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><i class="fa-solid fa-circle text-emerald-500 mr-1 text-[8px]"></i>>30 días</span>`
+            badge: `<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><i class="fa-solid fa-circle text-emerald-500 mr-1 text-[8px]"></i>&gt;30 d&#237;as</span>`
         };
     }
 }
 
+// INVENTARIO — VARIABLE DE MODO DE VISTA
 // =====================================================
-// INVENTARIO
-// =====================================================
+let _inventoryView = 'lista'; // 'lista' | 'segmentos'
+
+// Paleta de colores e iconos por categoría
+const _catMeta = {
+    default:      { color: 'indigo',  icon: 'fa-box'                },
+    'carnes':     { color: 'rose',    icon: 'fa-drumstick-bite'      },
+    'res':        { color: 'rose',    icon: 'fa-drumstick-bite'      },
+    'pollo':      { color: 'amber',   icon: 'fa-drumstick-bite'      },
+    'charcutería':{ color: 'orange',  icon: 'fa-sausage'             },
+    'charcuteria':{ color: 'orange',  icon: 'fa-sausage'             },
+    'víveres':    { color: 'emerald', icon: 'fa-basket-shopping'     },
+    'viveres':    { color: 'emerald', icon: 'fa-basket-shopping'     },
+    'lácteos':    { color: 'sky',     icon: 'fa-cow'                 },
+    'lacteos':    { color: 'sky',     icon: 'fa-cow'                 },
+    'mariscos':   { color: 'blue',    icon: 'fa-fish'                },
+    'bebidas':    { color: 'cyan',    icon: 'fa-bottle-water'        },
+    'licores':    { color: 'purple',  icon: 'fa-wine-bottle'         },
+    'panadería':  { color: 'yellow',  icon: 'fa-bread-slice'         },
+    'panaderia':  { color: 'yellow',  icon: 'fa-bread-slice'         },
+    'frutas':     { color: 'lime',    icon: 'fa-apple-whole'         },
+    'verduras':   { color: 'green',   icon: 'fa-leaf'                },
+    'limpieza':   { color: 'teal',    icon: 'fa-spray-can-sparkles'  },
+    'higiene':    { color: 'violet',  icon: 'fa-soap'                },
+    'granos':     { color: 'stone',   icon: 'fa-seedling'            },
+    'enlatados':  { color: 'slate',   icon: 'fa-canned-food'         },
+};
+
+function _getCatMeta(categoria) {
+    if (!categoria) return _catMeta.default;
+    const key = categoria.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // Partial match
+    for (const k of Object.keys(_catMeta)) {
+        if (k !== 'default' && key.includes(k)) return _catMeta[k];
+    }
+    return _catMeta.default;
+}
+
+// ─── KPI BAR ─────────────────────────────────────────
+function _updateInventoryKpis() {
+    const total    = products.length;
+    const cats     = new Set(products.map(p => (p.categoria || 'Sin categoría').trim())).size;
+    const lowStock = products.filter(p => (parseFloat(p.stock) || 0) < 5).length;
+    const valor    = products.reduce((s, p) => s + (parseFloat(p.stock) || 0) * (parseFloat(p.costo) || 0), 0);
+
+    const setEl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setEl('inv-kpi-total', total);
+    setEl('inv-kpi-cats',  cats);
+    setEl('inv-kpi-low',   lowStock);
+    setEl('inv-kpi-valor', '$' + valor.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+}
+
+// ─── RENDER LISTA ─────────────────────────────────────
 function renderInventory() {
     if (!isAdmin) return;
     const tbody = document.getElementById('inventory-table-body');
@@ -1540,11 +1614,14 @@ function renderInventory() {
         const vencInfo = getVencimientoInfo(p.fechaVencimiento);
         const vencHtml = vencInfo ? vencInfo.badge : '<span class="text-xs text-slate-300">-</span>';
         const marcaHtml = p.marca ? `<span class="inline-block mt-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/40 mr-1"><i class="fa-solid fa-tag text-[9px] mr-1"></i>${p.marca}</span>` : '';
-        const imgHtml = p.imagen 
-            ? `<div class="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 border border-slate-200 dark:border-slate-700"><img src="${p.imagen}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\\'w-full h-full flex items-center justify-center text-slate-400 text-xs\\\'>📦</div>'"></div>`
+        const imgHtml = p.imagen
+            ? `<div class="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 shrink-0 border border-slate-200 dark:border-slate-700"><img src="${p.imagen}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center text-slate-400 text-xs\\'>📦</div>'"></div>`
             : `<div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 shrink-0 flex items-center justify-center border border-slate-200 dark:border-slate-700/60 text-xs"><i class="fa-solid fa-image"></i></div>`;
         tbody.innerHTML += `
-            <tr class="hover:bg-white/60 dark:hover:bg-slate-800/40 transition border-b border-white/40 dark:border-slate-800">
+            <tr data-prod-id="${p.id}" class="hover:bg-white/60 dark:hover:bg-slate-800/40 transition border-b border-white/40 dark:border-slate-800">
+                <td class="p-4 w-10">
+                    <input type="checkbox" class="inv-row-check w-4 h-4 rounded accent-indigo-600 cursor-pointer" data-id="${p.id}" onchange="updateInventorySelectionBar()">
+                </td>
                 <td class="p-4 text-sm font-medium text-slate-500 dark:text-slate-400">${p.codigo || ''}</td>
                 <td class="p-4">
                     <div class="flex items-center gap-3">
@@ -1568,32 +1645,293 @@ function renderInventory() {
     });
     const badge = document.getElementById('badge-stock');
     if (badge) {
-        if (lowStockCount > 0) {
-            badge.classList.remove('hidden');
-            badge.textContent = lowStockCount;
-        } else {
-            badge.classList.add('hidden');
-        }
+        if (lowStockCount > 0) { badge.classList.remove('hidden'); badge.textContent = lowStockCount; }
+        else { badge.classList.add('hidden'); }
     }
+    // Reset master checkbox & bulk bar
+    const master = document.getElementById('inv-master-checkbox');
+    if (master) master.checked = false;
+    updateInventorySelectionBar();
+    _updateInventoryKpis();
+
     const searchVal = document.getElementById('search-inventory')?.value;
     if (searchVal) filterInventory(searchVal);
+
+    // If segment view is active, also refresh it
+    if (_inventoryView === 'segmentos') renderInventorySegments();
 }
 
+// ─── FILTER ──────────────────────────────────────────
 function filterInventory(query) {
-    const tbody = document.getElementById('inventory-table-body');
-    if (!tbody) return;
     const q = (query || '').toLowerCase().trim();
-    const rows = tbody.getElementsByTagName('tr');
-    for (let r of rows) {
-        if (!q) {
-            r.style.display = '';
-        } else {
-            const text = r.textContent.toLowerCase();
-            r.style.display = text.includes(q) ? '' : 'none';
+
+    // Filtrar tabla lista
+    const tbody = document.getElementById('inventory-table-body');
+    if (tbody) {
+        const rows = tbody.getElementsByTagName('tr');
+        for (let r of rows) {
+            r.style.display = (!q || r.textContent.toLowerCase().includes(q)) ? '' : 'none';
         }
+        // sync master checkbox after filter
+        const visibleChecks = [...document.querySelectorAll('.inv-row-check')].filter(c => c.closest('tr').style.display !== 'none');
+        const master = document.getElementById('inv-master-checkbox');
+        if (master) master.checked = visibleChecks.length > 0 && visibleChecks.every(c => c.checked);
+    }
+
+    // Filtrar tarjetas de segmentos
+    const grid = document.getElementById('inventory-segments-grid');
+    if (grid) {
+        const cards = grid.querySelectorAll('[data-cat-card]');
+        cards.forEach(card => {
+            const cat = (card.dataset.catCard || '').toLowerCase();
+            card.style.display = (!q || cat.includes(q)) ? '' : 'none';
+        });
     }
 }
 window.filterInventory = filterInventory;
+
+// ─── SELECCIÓN MASIVA ────────────────────────────────
+function toggleInventorySelectAll(checked) {
+    const rows = document.querySelectorAll('#inventory-table-body tr');
+    rows.forEach(row => {
+        if (row.style.display === 'none') return; // respeta filtro activo
+        const cb = row.querySelector('.inv-row-check');
+        if (cb) cb.checked = checked;
+    });
+    updateInventorySelectionBar();
+}
+window.toggleInventorySelectAll = toggleInventorySelectAll;
+
+function updateInventorySelectionBar() {
+    const checked = [...document.querySelectorAll('.inv-row-check')].filter(c => c.checked);
+    const bar = document.getElementById('inv-bulk-bar');
+    const countEl = document.getElementById('inv-selected-count');
+    if (countEl) countEl.textContent = checked.length;
+    if (bar) {
+        if (checked.length > 0) bar.classList.remove('hidden');
+        else bar.classList.add('hidden');
+    }
+    // Sync master checkbox
+    const allVisible = [...document.querySelectorAll('.inv-row-check')].filter(c => c.closest('tr').style.display !== 'none');
+    const master = document.getElementById('inv-master-checkbox');
+    if (master && allVisible.length > 0) {
+        master.checked = allVisible.every(c => c.checked);
+        master.indeterminate = !master.checked && allVisible.some(c => c.checked);
+    }
+}
+window.updateInventorySelectionBar = updateInventorySelectionBar;
+
+function clearInventorySelection() {
+    document.querySelectorAll('.inv-row-check').forEach(c => c.checked = false);
+    const master = document.getElementById('inv-master-checkbox');
+    if (master) { master.checked = false; master.indeterminate = false; }
+    updateInventorySelectionBar();
+}
+window.clearInventorySelection = clearInventorySelection;
+
+async function deleteSelectedProducts() {
+    const checked = [...document.querySelectorAll('.inv-row-check')].filter(c => c.checked);
+    if (checked.length === 0) return;
+    const result = await Swal.fire({
+        title: `¿Eliminar ${checked.length} artículo(s)?`,
+        html: `Esta acción eliminará <b>${checked.length} producto(s)</b> del inventario de forma permanente.<br><br><span class="text-sm text-slate-500">Esta acción no se puede deshacer.</span>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: `<i class="fa-solid fa-trash-can mr-1"></i> Sí, eliminar ${checked.length}`,
+        cancelButtonText: 'Cancelar'
+    });
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: 'Eliminando...', text: 'Por favor espera', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        await Promise.all(checked.map(c => getDb('products').doc(c.dataset.id).delete()));
+        Swal.fire({ icon: 'success', title: '¡Listo!', text: `${checked.length} producto(s) eliminados correctamente.`, timer: 2000, showConfirmButton: false });
+    } catch (err) {
+        Swal.fire('Error', 'Hubo un problema al eliminar algunos productos: ' + err.message, 'error');
+    }
+}
+window.deleteSelectedProducts = deleteSelectedProducts;
+
+// ─── TOGGLE VISTA ────────────────────────────────────
+function toggleInventoryView(mode) {
+    _inventoryView = mode;
+    const listaView    = document.getElementById('inventory-lista-view');
+    const segView      = document.getElementById('inventory-segments-view');
+    const btnLista     = document.getElementById('btn-view-lista');
+    const btnSegmentos = document.getElementById('btn-view-segmentos');
+    const bulkBar      = document.getElementById('inv-bulk-bar');
+
+    const activeClass   = 'px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold transition-all flex items-center gap-1.5';
+    const inactiveClass = 'px-3 py-1.5 rounded-lg text-slate-500 dark:text-slate-400 text-xs font-bold hover:bg-white/50 dark:hover:bg-slate-700/50 transition-all flex items-center gap-1.5';
+
+    if (mode === 'lista') {
+        if (listaView) listaView.classList.remove('hidden');
+        if (segView)   segView.classList.add('hidden');
+        if (btnLista)     btnLista.className     = activeClass;
+        if (btnSegmentos) btnSegmentos.className = inactiveClass;
+    } else {
+        if (listaView) listaView.classList.add('hidden');
+        if (segView)   segView.classList.remove('hidden');
+        if (bulkBar)   bulkBar.classList.add('hidden'); // bulk delete no aplica en vista segmentos
+        if (btnLista)     btnLista.className     = inactiveClass;
+        if (btnSegmentos) btnSegmentos.className = activeClass;
+        renderInventorySegments();
+    }
+}
+window.toggleInventoryView = toggleInventoryView;
+
+// ─── VISTA SEGMENTOS ─────────────────────────────────
+function renderInventorySegments() {
+    const grid = document.getElementById('inventory-segments-grid');
+    if (!grid) return;
+
+    // Agrupar por categoría
+    const catMap = {};
+    products.forEach(p => {
+        const cat = (p.categoria || 'Sin categoría').trim();
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(p);
+    });
+
+    const cats = Object.keys(catMap).sort();
+    grid.innerHTML = '';
+
+    const filterQ = (document.getElementById('search-inventory')?.value || '').toLowerCase().trim();
+
+    cats.forEach(cat => {
+        if (filterQ && !cat.toLowerCase().includes(filterQ)) return;
+        const items = catMap[cat];
+        const meta  = _getCatMeta(cat);
+        const c     = meta.color;
+
+        // Cálculos
+        let totalKg   = 0, totalUnd = 0, valor = 0, lowStock = 0;
+        items.forEach(p => {
+            const stock = parseFloat(p.stock) || 0;
+            const costo = parseFloat(p.costo) || 0;
+            if ((p.tipo || '').toLowerCase() === 'kg') totalKg += stock;
+            else totalUnd += stock;
+            valor += stock * costo;
+            if (stock < 5) lowStock++;
+        });
+
+        const stockLines = [];
+        if (totalKg  > 0) stockLines.push(`<span class="font-black text-slate-800 dark:text-white">${totalKg.toFixed(2)}</span> <span class="text-xs text-slate-500">kg</span>`);
+        if (totalUnd > 0) stockLines.push(`<span class="font-black text-slate-800 dark:text-white">${totalUnd.toFixed(0)}</span> <span class="text-xs text-slate-500">und</span>`);
+        if (stockLines.length === 0) stockLines.push(`<span class="font-black text-slate-400">0</span>`);
+
+        const lowBadge = lowStock > 0
+            ? `<div class="mt-2 flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i> ${lowStock} producto(s) con bajo stock</div>`
+            : '';
+
+        // Tabla interna expandible
+        const detalleRows = items.map(p => {
+            const st = parseFloat(p.stock) || 0;
+            const pr = parseFloat(p.precio) || 0;
+            const co = parseFloat(p.costo) || 0;
+            const stClass = st < 5 ? 'text-rose-500 font-black' : 'text-slate-700 dark:text-slate-300';
+            return `<tr class="border-b border-slate-100 dark:border-slate-800 text-xs">
+                <td class="py-1.5 pr-2 font-semibold text-slate-700 dark:text-slate-200 max-w-[160px] truncate">${p.nombre}</td>
+                <td class="py-1.5 pr-2 ${stClass} text-right tabular-nums">${st.toFixed(2)} ${p.tipo || ''}</td>
+                <td class="py-1.5 pr-2 text-right tabular-nums text-emerald-600 font-bold">$${pr.toFixed(2)}</td>
+                <td class="py-1.5 text-right tabular-nums text-rose-500">C:$${co.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+
+        const cardId = 'segcard-' + cat.replace(/\W+/g, '_');
+
+        // Colores según meta.color (usando clases hardcoded para Tailwind purge)
+        const colorMap = {
+            indigo:  { bg: 'bg-indigo-50 dark:bg-indigo-950/40',  icon: 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400',  border: 'border-indigo-200 dark:border-indigo-800/40',  badge: 'bg-indigo-600' },
+            rose:    { bg: 'bg-rose-50 dark:bg-rose-950/40',      icon: 'bg-rose-100 dark:bg-rose-900/60 text-rose-600 dark:text-rose-400',          border: 'border-rose-200 dark:border-rose-800/40',      badge: 'bg-rose-600'   },
+            amber:   { bg: 'bg-amber-50 dark:bg-amber-950/40',    icon: 'bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400',      border: 'border-amber-200 dark:border-amber-800/40',    badge: 'bg-amber-600'  },
+            orange:  { bg: 'bg-orange-50 dark:bg-orange-950/40',  icon: 'bg-orange-100 dark:bg-orange-900/60 text-orange-600 dark:text-orange-400',  border: 'border-orange-200 dark:border-orange-800/40',  badge: 'bg-orange-600' },
+            emerald: { bg: 'bg-emerald-50 dark:bg-emerald-950/40',icon: 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-800/40', badge: 'bg-emerald-600'},
+            sky:     { bg: 'bg-sky-50 dark:bg-sky-950/40',        icon: 'bg-sky-100 dark:bg-sky-900/60 text-sky-600 dark:text-sky-400',              border: 'border-sky-200 dark:border-sky-800/40',        badge: 'bg-sky-600'    },
+            blue:    { bg: 'bg-blue-50 dark:bg-blue-950/40',      icon: 'bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400',          border: 'border-blue-200 dark:border-blue-800/40',      badge: 'bg-blue-600'   },
+            cyan:    { bg: 'bg-cyan-50 dark:bg-cyan-950/40',      icon: 'bg-cyan-100 dark:bg-cyan-900/60 text-cyan-600 dark:text-cyan-400',          border: 'border-cyan-200 dark:border-cyan-800/40',      badge: 'bg-cyan-600'   },
+            purple:  { bg: 'bg-purple-50 dark:bg-purple-950/40',  icon: 'bg-purple-100 dark:bg-purple-900/60 text-purple-600 dark:text-purple-400',  border: 'border-purple-200 dark:border-purple-800/40',  badge: 'bg-purple-600' },
+            yellow:  { bg: 'bg-yellow-50 dark:bg-yellow-950/40',  icon: 'bg-yellow-100 dark:bg-yellow-900/60 text-yellow-600 dark:text-yellow-400',  border: 'border-yellow-200 dark:border-yellow-800/40',  badge: 'bg-yellow-500' },
+            lime:    { bg: 'bg-lime-50 dark:bg-lime-950/40',      icon: 'bg-lime-100 dark:bg-lime-900/60 text-lime-600 dark:text-lime-400',          border: 'border-lime-200 dark:border-lime-800/40',      badge: 'bg-lime-600'   },
+            green:   { bg: 'bg-green-50 dark:bg-green-950/40',    icon: 'bg-green-100 dark:bg-green-900/60 text-green-600 dark:text-green-400',      border: 'border-green-200 dark:border-green-800/40',    badge: 'bg-green-600'  },
+            teal:    { bg: 'bg-teal-50 dark:bg-teal-950/40',      icon: 'bg-teal-100 dark:bg-teal-900/60 text-teal-600 dark:text-teal-400',          border: 'border-teal-200 dark:border-teal-800/40',      badge: 'bg-teal-600'   },
+            violet:  { bg: 'bg-violet-50 dark:bg-violet-950/40',  icon: 'bg-violet-100 dark:bg-violet-900/60 text-violet-600 dark:text-violet-400',  border: 'border-violet-200 dark:border-violet-800/40',  badge: 'bg-violet-600' },
+            stone:   { bg: 'bg-stone-50 dark:bg-stone-950/40',    icon: 'bg-stone-100 dark:bg-stone-900/60 text-stone-600 dark:text-stone-400',      border: 'border-stone-200 dark:border-stone-800/40',    badge: 'bg-stone-600'  },
+            slate:   { bg: 'bg-slate-50 dark:bg-slate-900/40',    icon: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',         border: 'border-slate-200 dark:border-slate-700/40',    badge: 'bg-slate-600'  },
+        };
+        const cl = colorMap[c] || colorMap.indigo;
+
+        const card = document.createElement('div');
+        card.setAttribute('data-cat-card', cat);
+        card.className = `glass-panel rounded-2xl border ${cl.border} overflow-hidden animated-card transition-all`;
+        card.innerHTML = `
+            <div class="${cl.bg} px-5 py-4">
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl ${cl.icon} flex items-center justify-center shrink-0 text-base">
+                            <i class="fa-solid ${meta.icon}"></i>
+                        </div>
+                        <div>
+                            <div class="font-black text-slate-800 dark:text-slate-100 text-sm leading-tight">${cat}</div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${items.length} producto(s)</div>
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-black uppercase tracking-wider text-white ${cl.badge} px-2 py-1 rounded-lg">${items.length} ítems</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mt-4">
+                    <div class="bg-white/60 dark:bg-slate-900/40 rounded-xl px-3 py-2.5">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                            <i class="fa-solid fa-weight-scale mr-1"></i>Stock total
+                        </div>
+                        <div class="text-base leading-snug">${stockLines.join(' <span class="text-slate-300 mx-1">·</span> ')}</div>
+                    </div>
+                    <div class="bg-white/60 dark:bg-slate-900/40 rounded-xl px-3 py-2.5">
+                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                            <i class="fa-solid fa-dollar-sign mr-1"></i>Valor inventario
+                        </div>
+                        <div class="font-black text-slate-800 dark:text-white text-base tabular-nums">$${valor.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                </div>
+                ${lowBadge}
+            </div>
+
+            <!-- Detalle expandible -->
+            <div class="px-4 py-2 border-t ${cl.border}">
+                <button onclick="toggleSegmentDetail('${cardId}')" class="w-full flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition py-1">
+                    <span><i class="fa-solid fa-list-ul mr-1.5"></i>Ver detalle de productos</span>
+                    <i id="${cardId}-icon" class="fa-solid fa-chevron-down transition-transform"></i>
+                </button>
+                <div id="${cardId}" class="hidden overflow-hidden mt-1">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
+                                <th class="pb-1 pr-2 text-left">Nombre</th>
+                                <th class="pb-1 pr-2 text-right">Stock</th>
+                                <th class="pb-1 pr-2 text-right">Precio V.</th>
+                                <th class="pb-1 text-right">Costo</th>
+                            </tr>
+                        </thead>
+                        <tbody>${detalleRows}</tbody>
+                    </table>
+                </div>
+            </div>`;
+        grid.appendChild(card);
+    });
+}
+window.renderInventorySegments = renderInventorySegments;
+
+function toggleSegmentDetail(cardId) {
+    const el   = document.getElementById(cardId);
+    const icon = document.getElementById(cardId + '-icon');
+    if (!el) return;
+    const isHidden = el.classList.contains('hidden');
+    el.classList.toggle('hidden', !isHidden);
+    if (icon) icon.style.transform = isHidden ? 'rotate(180deg)' : '';
+}
+window.toggleSegmentDetail = toggleSegmentDetail;
 
 // =====================================================
 // GESTIÓN Y COMPRESIÓN DE FOTOGRAFÍAS DE PRODUCTOS
@@ -10375,9 +10713,18 @@ function onBusinessTypeChange(type) {
 }
 
 function initBusinessMode() {
-    const mode = localStorage.getItem('pos_business_mode') || storeConfig.businessType || 'bodega';
+    // Si la tienda ya tiene su tipo configurado en Firestore o storeConfig, prevalece sobre cualquier caché local previa
+    const mode = storeConfig.businessType || localStorage.getItem('pos_business_mode') || 'bodega';
     storeConfig.businessType = mode;
+    localStorage.setItem('pos_business_mode', mode);
     
+    // Ocultar botón superior de cambio de modo: una vez creado el negocio (bodega o comida rápida), se queda en ese modo
+    const toggleBtn = document.getElementById('btn-toggle-business-mode');
+    if (toggleBtn) {
+        toggleBtn.classList.add('hidden');
+        toggleBtn.style.display = 'none';
+    }
+
     const label = document.getElementById('business-mode-label');
     const icon = document.getElementById('business-mode-icon');
     const orderBar = document.getElementById('fast-food-order-bar');
@@ -10407,6 +10754,15 @@ function initBusinessMode() {
 }
 
 function toggleBusinessMode() {
+    // Si hay un negocio registrado asignado, el modo es inmutable: bodega se queda bodega, comida rápida se queda comida rápida
+    if (currentNegocioId) {
+        const toggleBtn = document.getElementById('btn-toggle-business-mode');
+        if (toggleBtn) {
+            toggleBtn.classList.add('hidden');
+            toggleBtn.style.display = 'none';
+        }
+        return;
+    }
     const current = storeConfig.businessType || 'bodega';
     const nextMode = current === 'bodega' ? 'comida_rapida' : 'bodega';
     storeConfig.businessType = nextMode;
