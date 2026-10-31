@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v19 · 22/10/2026 · rediseño proporcional, limpio y elegante del POS y navegación';
+const APP_VERSION = 'v20 · 31/10/2026 · premium native weight modal and dark mode theme';
 
 function pintarVersionApp() {
     try {
@@ -310,7 +310,9 @@ function limpiarDatosLocales() {
     const clavesFijas = [
         'cached_session', 'cached_products', 'cached_clientes', 'cached_rates',
         'cached_storeConfig', 'holding_branches', 'holding_transfers',
-        'holding_cajeros', 'active_branch_id'
+        'holding_cajeros', 'active_branch_id', 'pos_business_mode',
+        'pos_active_comandas', 'pos_daily_order_num', 'pos_kitchen_sound',
+        'pos_active_parked_cart'
     ];
     clavesFijas.forEach(k => {
         try { localStorage.removeItem(k); } catch (e) {}
@@ -505,13 +507,11 @@ document.addEventListener('DOMContentLoaded', () => {
             db.collection('negocios').doc(currentNegocioId).get().then(negDoc => {
                 if (negDoc && negDoc.exists) {
                     const nData = negDoc.data();
-                    const bType = nData.businessType || nData.tipoNegocio;
-                    if (bType) {
-                        storeConfig.businessType = bType;
-                        localStorage.setItem('pos_business_mode', bType);
-                        guardarCache('storeConfig', storeConfig);
-                        initBusinessMode();
-                    }
+                    const bType = nData.businessType || nData.tipoNegocio || 'bodega';
+                    storeConfig.businessType = bType;
+                    localStorage.setItem('pos_business_mode', bType);
+                    guardarCache('storeConfig', storeConfig);
+                    initBusinessMode();
                 }
             }).catch(e => console.warn('Carga inicial tipo negocio:', e));
         }
@@ -1071,7 +1071,7 @@ function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplic
     }
 
     // Comanda de Cocina para Modo Comida Rápida
-    if (typeof crearComandaCocina === 'function') {
+    if (typeof crearComandaCocina === 'function' && storeConfig.businessType === 'comida_rapida') {
         crearComandaCocina(offlineSale, offlineSale.id);
     }
 
@@ -1376,6 +1376,9 @@ function toggleSidebar() {
 }
 
 function switchTab(tabId) {
+    if (tabId === 'cocina' && storeConfig.businessType !== 'comida_rapida') {
+        return;
+    }
     if (!isAdmin && ['inventario', 'reportes', 'usuarios', 'compras', 'libro-fiscal', 'tienda-online', 'torre-control'].includes(tabId)) {
         return Swal.fire({
             title: 'Acceso Restringido',
@@ -1437,10 +1440,9 @@ async function fetchRates() {
             storeConfig.phone = data.storePhone || '';
             storeConfig.nroFactura = data.nroFactura || 1001;
             storeConfig.nroControl = data.nroControl || '00-001001';
-            if (data.businessType || data.tipoNegocio) {
-                storeConfig.businessType = data.businessType || data.tipoNegocio;
-                localStorage.setItem('pos_business_mode', storeConfig.businessType);
-            }
+            const bType = data.businessType || data.tipoNegocio || storeConfig.businessType || 'bodega';
+            storeConfig.businessType = bType;
+            localStorage.setItem('pos_business_mode', bType);
         } else {
             rates.bcv = autoRates.bcv;
             if (navigator.onLine) {
@@ -2436,7 +2438,9 @@ function procesarCodigoEscaneado(val) {
     }
     const m = products.find(p => p.codigo && p.codigo.toLowerCase() === val);
     if (m) {
-        if (m.tipo === 'Unidad') {
+        const mTipoLower = String(m.tipo || '').toLowerCase().trim();
+        const mIsUnidad = !m.tipo || ['unidad', 'und', 'unid', 'pz', 'pieza'].includes(mTipoLower);
+        if (mIsUnidad || storeConfig.businessType === 'comida_rapida') {
             addToCart(m, multiplier);
             Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `${multiplier > 1 ? multiplier + 'x ' : ''}${m.nombre} agregado`, timer: 1500, showConfirmButton: false });
         } else {
@@ -2455,7 +2459,9 @@ function procesarCodigoEscaneado(val) {
     );
     if (filtered.length >= 1) {
         const f = filtered[0];
-        if (f.tipo === 'Unidad') {
+        const fTipoLower = String(f.tipo || '').toLowerCase().trim();
+        const fIsUnidad = !f.tipo || ['unidad', 'und', 'unid', 'pz', 'pieza'].includes(fTipoLower);
+        if (fIsUnidad || storeConfig.businessType === 'comida_rapida') {
             addToCart(f, multiplier);
             Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `${multiplier > 1 ? multiplier + 'x ' : ''}${f.nombre} agregado`, timer: 1500, showConfirmButton: false });
         } else {
@@ -2917,27 +2923,230 @@ async function openVentaRapidaModal() {
     }
 }
 
+
+// =====================================================
+// MODAL DE PESAJE / BALANZA Y CANTIDAD (UI NATIVA PREMIUM)
+// =====================================================
+let currentPesoModalState = {
+    prod: null,
+    cartIndex: -1,
+    isWeight: true,
+    precioBase: 0,
+    maxStock: Infinity
+};
+
+function parsePesoValue(val) {
+    if (val === undefined || val === null) return NaN;
+    let s = String(val).trim().toLowerCase();
+    if (s.endsWith('kg') || s.endsWith('kilo') || s.endsWith('kilos')) {
+        s = s.replace(/kg|kilo|kilos/g, '').trim();
+    } else if (s.endsWith('g') || s.endsWith('gr') || s.endsWith('gramos')) {
+        s = s.replace(/g|gr|gramos/g, '').trim();
+        const g = parseFloat(s.replace(',', '.'));
+        return isNaN(g) ? NaN : Math.round((g / 1000) * 1000) / 1000;
+    }
+    return parseFloat(s.replace(',', '.'));
+}
+
+function openPesoModal(prodOrId, cartIdx = -1) {
+    const prod = typeof prodOrId === 'object' ? prodOrId : products.find(p => p.id === prodOrId);
+    if (!prod) return;
+
+    const tipoLower = String(prod.tipo || '').toLowerCase().trim();
+    const isWeight = ['kg', 'kilo', 'kilos', 'g', 'gr', 'gramos', 'peso'].includes(tipoLower);
+    const maxStock = parseFloat(prod.stock) || Infinity;
+    const precioBase = Number(prod.precio) || 0;
+
+    currentPesoModalState = {
+        prod,
+        cartIndex: cartIdx,
+        isWeight,
+        precioBase,
+        maxStock
+    };
+
+    const modal = document.getElementById('modal-peso-producto');
+    const content = document.getElementById('modal-peso-content');
+    if (!modal || !content) {
+        // Fallback rápido si el elemento no estuviese disponible
+        return fallbackPesoPrompt(prod, cartIdx);
+    }
+
+    document.getElementById('peso-modal-prod-id').value = prod.id;
+    document.getElementById('peso-modal-cart-index').value = cartIdx;
+    document.getElementById('peso-modal-nombre').textContent = prod.nombre;
+    document.getElementById('peso-modal-tipo').textContent = isWeight ? 'Venta por Peso' : 'Cantidad';
+    document.getElementById('peso-modal-stock').textContent = `Stock: ${prod.stock} ${prod.tipo || ''}`;
+    document.getElementById('peso-modal-unidad').textContent = prod.tipo || (isWeight ? 'Kg' : 'Und');
+    document.getElementById('peso-modal-precio-unit').textContent = `${precioBase.toFixed(2)} / ${prod.tipo || 'Unidad'}`;
+
+    const iconEl = document.getElementById('peso-modal-icon');
+    if (iconEl) {
+        iconEl.className = isWeight ? 'fa-solid fa-scale-balanced' : 'fa-solid fa-cubes';
+    }
+
+    const chipsEl = document.getElementById('peso-modal-quick-chips');
+    if (chipsEl) {
+        chipsEl.style.display = isWeight ? 'block' : 'none';
+    }
+
+    const btnTextEl = document.getElementById('peso-modal-btn-text');
+    const btnIconEl = document.getElementById('peso-modal-btn-icon');
+    if (cartIdx >= 0) {
+        if (btnTextEl) btnTextEl.textContent = 'Guardar Cambios';
+        if (btnIconEl) btnIconEl.className = 'fa-solid fa-check';
+    } else {
+        if (btnTextEl) btnTextEl.textContent = 'Añadir al Ticket';
+        if (btnIconEl) btnIconEl.className = 'fa-solid fa-cart-plus';
+    }
+
+    const input = document.getElementById('peso-modal-input');
+    if (cartIdx >= 0 && cart[cartIdx]) {
+        input.value = cart[cartIdx].qty;
+    } else {
+        input.value = isWeight ? '0.500' : '1';
+    }
+
+    updateLivePesoTotals();
+
+    // Eventos de teclado en el input
+    input.oninput = updateLivePesoTotals;
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            confirmarPesoModal();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closePesoModal();
+        }
+    };
+
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+        content.classList.remove('scale-95');
+        content.classList.add('scale-100');
+        input.focus();
+        input.select();
+    });
+}
+
+function closePesoModal() {
+    const modal = document.getElementById('modal-peso-producto');
+    const content = document.getElementById('modal-peso-content');
+    if (!modal || !content) return;
+
+    modal.classList.add('opacity-0');
+    content.classList.remove('scale-100');
+    content.classList.add('scale-95');
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        document.getElementById('search-pos')?.focus();
+    }, 200);
+}
+
+function setPesoQuickVal(val) {
+    const input = document.getElementById('peso-modal-input');
+    if (!input) return;
+    input.value = Number(val).toFixed(3);
+    updateLivePesoTotals();
+    input.focus();
+    input.select();
+}
+
+function ajustarPesoModal(delta) {
+    const input = document.getElementById('peso-modal-input');
+    if (!input) return;
+    const current = parsePesoValue(input.value) || 0;
+    let next = current + delta;
+    if (next < 0) next = 0;
+    if (currentPesoModalState.isWeight) {
+        next = Math.round(next * 1000) / 1000;
+        input.value = next.toFixed(3);
+    } else {
+        next = Math.max(1, Math.round(next));
+        input.value = next;
+    }
+    updateLivePesoTotals();
+}
+
+function updateLivePesoTotals() {
+    const input = document.getElementById('peso-modal-input');
+    const usdEl = document.getElementById('peso-modal-total-usd');
+    const bsEl = document.getElementById('peso-modal-total-bs');
+    if (!input || !usdEl || !bsEl) return;
+
+    const val = parsePesoValue(input.value);
+    const validVal = (!isNaN(val) && val > 0) ? val : 0;
+    const totUsd = roundMoney(validVal * currentPesoModalState.precioBase);
+    const bcv = rates.bcv || 1;
+    const totBs = totUsd * bcv;
+
+    usdEl.textContent = `${totUsd.toFixed(2)}`;
+    bsEl.textContent = `Bs ${totBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function confirmarPesoModal() {
+    const input = document.getElementById('peso-modal-input');
+    if (!input) return;
+    const val = parsePesoValue(input.value);
+
+    if (isNaN(val) || val <= 0) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'warning',
+            title: 'Ingresa una cantidad o peso válido mayor a 0',
+            timer: 2500,
+            showConfirmButton: false
+        });
+        input.focus();
+        return;
+    }
+
+    if (val > currentPesoModalState.maxStock) {
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'warning',
+            title: `Supera stock disponible (${currentPesoModalState.maxStock} ${currentPesoModalState.prod.tipo || ''})`,
+            timer: 2500,
+            showConfirmButton: false
+        });
+        return;
+    }
+
+    const { prod, cartIndex, isWeight } = currentPesoModalState;
+    const finalVal = isWeight ? Math.round(val * 1000) / 1000 : val;
+
+    if (cartIndex >= 0 && cart[cartIndex]) {
+        cart[cartIndex].qty = finalVal;
+        updateCartUI();
+    } else {
+        addToCart(prod, finalVal);
+    }
+
+    closePesoModal();
+}
+
 async function addToCartPrompt(id) {
     const prod = products.find(p => p.id === id);
-    if (!prod || prod.stock <= 0) return Swal.fire('Error', 'No hay stock', 'error');
-    const { value: qty } = await Swal.fire({
-        title: prod.nombre,
-        input: 'number',
-        inputValue: '1',
-        showCancelButton: true,
-        inputAttributes: {
-            min: prod.tipo === 'Kg' ? '0.01' : '1',
-            max: prod.stock,
-            step: prod.tipo === 'Kg' ? 'any' : '1'
-        }
-    });
-    if (qty) addToCart(prod, parseFloat(qty));
-    document.getElementById('search-pos').focus();
+    if (!prod || prod.stock <= 0) return Swal.fire('Error', 'No hay stock disponible', 'error');
+    openPesoModal(prod, -1);
 }
+
 
 function addToCart(prod, q) {
     const isComida = storeConfig.businessType === 'comida_rapida';
-    const cant = Math.max(1, q || 1);
+    const tipoLower = String(prod.tipo || '').toLowerCase().trim();
+    const isWeight = ['kg', 'kilo', 'kilos', 'g', 'gr', 'gramos', 'peso'].includes(tipoLower);
+
+    let rawQ = typeof q === 'string' ? parseFloat(q.replace(',', '.')) : Number(q);
+    if (isNaN(rawQ) || rawQ <= 0) rawQ = 1;
+
+    const cant = isComida
+        ? Math.max(1, Math.round(rawQ))
+        : (isWeight ? Math.round(rawQ * 1000) / 1000 : (rawQ > 0 ? rawQ : 1));
 
     if (isComida) {
         // En comida rápida, cada plato preparado es independiente para que si hay 2 personas en una mesa
@@ -2959,7 +3168,7 @@ function addToCart(prod, q) {
         const ex = cart.find(i => i.id === prod.id && !i.modificadores);
         if (ex) {
             if (ex.qty + cant > prod.stock) return Swal.fire('Error', 'Supera stock disponible', 'error');
-            ex.qty += cant;
+            ex.qty = isWeight ? Math.round((ex.qty + cant) * 1000) / 1000 : (ex.qty + cant);
         } else {
             cart.push({
                 ...prod,
@@ -3007,28 +3216,10 @@ function separarPlatoEnItems(idx) {
 }
 
 function editCartQty(idx) {
-    const i = cart[idx];
-    const prod = products.find(p => p.id === i.id);
-    if (!prod) return;
-    Swal.fire({
-        title: 'Editar Cantidad',
-        input: 'number',
-        inputValue: i.qty,
-        showCancelButton: true,
-        inputAttributes: {
-            min: prod.tipo === 'Kg' ? '0.01' : '1',
-            max: prod.stock,
-            step: prod.tipo === 'Kg' ? 'any' : '1'
-        }
-    }).then(res => {
-        if (res.isConfirmed && res.value) {
-            const val = parseFloat(res.value);
-            if (val > prod.stock) return Swal.fire('Error', 'Supera stock', 'error');
-            if (val <= 0) cart.splice(idx, 1);
-            else cart[idx].qty = val;
-            updateCartUI();
-        }
-    });
+    const item = cart[idx];
+    if (!item) return;
+    const prod = products.find(p => p.id === item.id) || item;
+    openPesoModal(prod, idx);
 }
 
 function changeCartQty(idx, delta) {
@@ -3063,9 +3254,17 @@ function changeCartQty(idx, delta) {
         return;
     }
 
+    const tipoLower = String(item.tipo || (prod ? prod.tipo : '')).toLowerCase().trim();
+    const isWeight = ['kg', 'kilo', 'kilos', 'g', 'gr', 'gramos', 'peso'].includes(tipoLower);
     let step = delta;
-    if (item.tipo === 'Kg' && Math.abs(item.qty) < 1 && Math.abs(delta) === 1) {
-        step = delta * 0.25;
+    if (isWeight) {
+        if (item.qty <= 0.5 && delta < 0) {
+            step = -0.05;
+        } else if (item.qty <= 1 && delta < 0) {
+            step = -0.1;
+        } else if (item.qty < 1 && delta > 0) {
+            step = 0.1;
+        }
     }
 
     let newQty = Math.round((item.qty + step) * 1000) / 1000;
@@ -3096,6 +3295,7 @@ function updateCartUI() {
     currentSaleTotal = 0;
     let subtotal = 0;
     const currentBcv = rates.bcv || 1;
+    const isComidaMode = storeConfig.businessType === 'comida_rapida';
 
     // Actualizar badge en la cabecera del ticket
     const badgeEl = document.getElementById('ticket-item-count');
@@ -3137,7 +3337,7 @@ function updateCartUI() {
 
             // Badges visuales de modificadores para comida rápida
             let modBadgesHtml = '';
-            if (i.modificadores) {
+            if (isComidaMode && i.modificadores) {
                 const parts = [];
                 if (i.modificadores.salsas && i.modificadores.salsas.length > 0) {
                     parts.push(`<span class="inline-flex items-center gap-1 text-[9px] font-black text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900/40">🍯 ${i.modificadores.salsas.join(', ')}</span>`);
@@ -3156,7 +3356,6 @@ function updateCartUI() {
                 }
             }
 
-            const isComidaMode = storeConfig.businessType === 'comida_rapida';
             const countSame = cart.filter(x => x.id === i.id).length;
             let itemIndexSuffix = '';
             if (isComidaMode && countSame > 1) {
@@ -3187,11 +3386,7 @@ function updateCartUI() {
                     </button>
                     ` : ''}
                 </div>
-            ` : `
-                <button type="button" onclick="openModificadoresModal(${idx})" class="mt-2 w-full py-1 px-2.5 rounded-xl bg-orange-50/80 hover:bg-orange-100 dark:bg-orange-950/50 dark:hover:bg-orange-900/60 text-orange-700 dark:text-orange-300 font-bold text-[10px] flex items-center justify-between border border-orange-200/80 dark:border-orange-800/50 transition-colors">
-                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-wand-magic-sparkles text-orange-500"></i> ${i.modificadores ? 'Modificar Salsas / Extras' : 'Personalizar Salsas / Extras'}</span>
-                    <i class="fa-solid fa-chevron-right text-[8px]"></i>
-                </button>`;
+            ` : '';
 
             el.innerHTML += `
                 <div class="group bg-white/95 dark:bg-slate-800/95 hover:bg-white dark:hover:bg-slate-800 p-3.5 rounded-2xl shadow-xs border border-slate-200/70 dark:border-slate-700/60 mb-2.5 transition-all">
@@ -4269,7 +4464,7 @@ async function confirmSale() {
     }
 
     // Comanda de Cocina para Modo Comida Rápida
-    if (typeof crearComandaCocina === 'function') {
+    if (typeof crearComandaCocina === 'function' && storeConfig.businessType === 'comida_rapida') {
         crearComandaCocina(onlineSaleData, saleRef.id);
     }
 
@@ -10744,7 +10939,9 @@ function initBusinessMode() {
         if (label) label.textContent = 'Modo Bodega';
         if (icon) icon.className = 'fa-solid fa-shop text-primary-500';
         if (orderBar) orderBar.classList.add('hidden');
-        if (btnCocina && activeComandas.length === 0) btnCocina.classList.add('hidden');
+        if (btnCocina) btnCocina.classList.add('hidden');
+        const badgeCocinaSidebar = document.getElementById('badge-cocina');
+        if (badgeCocinaSidebar) badgeCocinaSidebar.classList.add('hidden');
         if (btnMermas) btnMermas.classList.remove('hidden');
     }
 
@@ -11095,6 +11292,7 @@ function playKitchenAlertSound() {
 }
 
 function crearComandaCocina(saleData, saleId) {
+    if (storeConfig.businessType !== 'comida_rapida') return;
     if (!saleData || !saleData.items || saleData.items.length === 0) return;
 
     const orderNum = getNextDailyOrderNumber();
@@ -11178,7 +11376,7 @@ function renderKitchenDisplay() {
 
     const totalActivas = listCola.length + listPlancha.length;
     if (badgeCocinaSidebar) {
-        if (totalActivas > 0) {
+        if (storeConfig.businessType === 'comida_rapida' && totalActivas > 0) {
             badgeCocinaSidebar.classList.remove('hidden');
             badgeCocinaSidebar.textContent = totalActivas;
         } else {
