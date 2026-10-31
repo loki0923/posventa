@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v29 · 31/10/2026 · bloque c: rediseño pantallas metricas formato numerico menu lateral y contraste';
+const APP_VERSION = 'v30 · 31/10/2026 · bloque b: sync catalogo publico, regla pedidos web, XSS pedidos, sin demo login';
 
 function pintarVersionApp() {
     try {
@@ -1426,24 +1426,6 @@ function toggleAbonoBank() {
     else c.classList.add('hidden');
 }
 
-function cargarDemoLogin() {
-    const emailEl = document.getElementById('login-email');
-    const passEl = document.getElementById('login-password');
-    if (emailEl) emailEl.value = 'admin@bodega.com';
-    if (passEl) passEl.value = '123456';
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'info',
-            title: 'Credenciales autocompletadas',
-            timer: 1500,
-            showConfirmButton: false
-        });
-    }
-}
-window.cargarDemoLogin = cargarDemoLogin;
-
 async function procesarLogin() {
     const email = document.getElementById('login-email').value;
     const pass = document.getElementById('login-password').value;
@@ -1546,6 +1528,7 @@ function setupFirebaseListeners() {
             renderInventory();
         }
         renderPOSProducts();
+        if (isAdmin && !snapshot.metadata.fromCache) programarSyncCatalogoPublico();
         if (document.getElementById('tab-mermas')?.classList.contains('active')) {
             populateMermasSelect();
         }
@@ -2626,31 +2609,87 @@ function editProduct(id) {
 }
 
 
-// Sincroniza la proyección pública segura para catalogo.html (sin costos ni stock confidencial)
-async function sincronizarCatalogoPublico() {
+// =====================================================
+// CATÁLOGO PÚBLICO (proyección segura para catalogo.html)
+// products_public NO lleva costo ni stock exacto: solo precio, categoría,
+// disponibilidad y un stock acotado (máx. 50) para limitar el carrito web.
+// Se mantiene solo: cada vez que cambia el inventario (y llega del servidor)
+// se compara con lo ya publicado y se escriben SOLO las diferencias
+// (altas, cambios y borrados), en lotes de 400.
+// =====================================================
+const PUB_CAMPOS = ['nombre', 'marca', 'categoria', 'precio', 'tipo', 'imagen', 'disponible', 'stockPublico', 'activo'];
+let _pubFirmas = null;      // { id: firma } de lo que ya está publicado
+let _pubNegocio = null;
+let _pubTimer = null;
+
+function proyectarProductoPublico(p) {
+    const stock = parseFloat(p.stock) || 0;
+    return {
+        nombre: p.nombre || '',
+        marca: p.marca || '',
+        categoria: p.categoria || 'General',
+        precio: parseFloat(p.precio) || 0,
+        tipo: p.tipo || 'unidad',
+        imagen: p.imagen || '',
+        disponible: stock > 0,
+        stockPublico: Math.min(Math.max(stock, 0), 50),
+        activo: p.activo !== false
+    };
+}
+function firmaPublica(obj) {
+    return JSON.stringify(PUB_CAMPOS.map(k => obj[k] === undefined ? null : obj[k]));
+}
+
+// Se llama desde el listener de products; espera 3 s para agrupar cambios.
+function programarSyncCatalogoPublico() {
     if (!isAdmin || !currentNegocioId) return;
+    clearTimeout(_pubTimer);
+    _pubTimer = setTimeout(sincronizarCatalogoPublico, 3000);
+}
+
+async function sincronizarCatalogoPublico() {
+    if (!isAdmin || !currentNegocioId || !navigator.onLine) return;
+    // Nunca sincronizar con una lista vacía: podría borrar el catálogo público
+    // por una carga incompleta. (Para vaciarlo a propósito, borra los productos
+    // uno a uno: la lista deja de estar vacía en el momento del borrado.)
+    if (!Array.isArray(products) || products.length === 0) return;
     try {
-        const batch = db.batch();
-        let ops = 0;
+        if (_pubNegocio !== currentNegocioId) { _pubFirmas = null; _pubNegocio = currentNegocioId; }
+        if (_pubFirmas === null) {
+            const snap = await getDb('products_public').get();
+            _pubFirmas = {};
+            snap.forEach(d => { _pubFirmas[d.id] = firmaPublica(d.data()); });
+        }
+
+        const ops = [];
+        const vigentes = new Set();
         products.forEach(p => {
-            if (p && p.id && ops < 400) {
-                const pubRef = getDb('products_public').doc(p.id);
-                batch.set(pubRef, {
-                    nombre: p.nombre,
-                    marca: p.marca || '',
-                    categoria: p.categoria || 'General',
-                    precio: parseFloat(p.precio) || 0,
-                    tipo: p.tipo || 'unidad',
-                    imagen: p.imagen || '',
-                    disponible: (parseFloat(p.stock) > 0),
-                    activo: p.activo !== false,
-                    updatedAt: new Date().toISOString()
-                }, { merge: true });
-                ops++;
-            }
+            if (!p || !p.id) return;
+            vigentes.add(p.id);
+            const proy = proyectarProductoPublico(p);
+            const firma = firmaPublica(proy);
+            if (_pubFirmas[p.id] !== firma) ops.push({ tipo: 'set', id: p.id, proy, firma });
         });
-        if (ops > 0) await batch.commit();
-        console.log(`Catálogo público sincronizado (${ops} productos proyectados sin costos)`);
+        Object.keys(_pubFirmas).forEach(id => {
+            if (!vigentes.has(id)) ops.push({ tipo: 'del', id });
+        });
+        if (ops.length === 0) return;
+
+        for (let i = 0; i < ops.length; i += 400) {
+            const lote = ops.slice(i, i + 400);
+            const batch = db.batch();
+            lote.forEach(op => {
+                const ref = getDb('products_public').doc(op.id);
+                if (op.tipo === 'set') batch.set(ref, { ...op.proy, updatedAt: new Date().toISOString() });
+                else batch.delete(ref);
+            });
+            await batch.commit();
+            lote.forEach(op => {
+                if (op.tipo === 'set') _pubFirmas[op.id] = op.firma;
+                else delete _pubFirmas[op.id];
+            });
+        }
+        console.log(`Catálogo público sincronizado (${ops.length} cambios, sin costos).`);
     } catch (e) {
         console.warn('Error sincronizando catálogo público:', e);
     }
@@ -11347,6 +11386,8 @@ function renderPedidosOnlineList() {
     listEl.innerHTML = filtrados.map(p => {
         const isPendiente = p.estado === 'pendiente';
         const isCompletado = p.estado === 'completado';
+        // id solo con caracteres seguros: se usa dentro de onclick="...('id')"
+        const idSeguro = String(p.id || '').replace(/[^A-Za-z0-9_-]/g, '');
         const badgeEstado = isPendiente 
             ? `<span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60 flex items-center gap-1"><i class="fa-solid fa-clock text-[9px] animate-pulse"></i> Pendiente</span>`
             : isCompletado
@@ -11358,8 +11399,8 @@ function renderPedidosOnlineList() {
 
         const itemsHtml = (p.items || []).map(i => `
             <div class="flex items-center justify-between text-xs py-1 border-b border-slate-100/60 dark:border-slate-800/60 last:border-none">
-                <span class="font-bold text-slate-800 dark:text-slate-200"><span class="text-indigo-600 dark:text-indigo-400 font-black mr-1">${i.qty}x</span> ${i.nombre}</span>
-                <span class="font-black text-slate-700 dark:text-slate-300 tabular-nums">$${(i.total || (i.precio * i.qty)).toFixed(2)}</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200"><span class="text-indigo-600 dark:text-indigo-400 font-black mr-1">${escapeHtml(i.qty)}x</span> ${escapeHtml(i.nombre)}</span>
+                <span class="font-black text-slate-700 dark:text-slate-300 tabular-nums">$${(Number(i.total) || (Number(i.precio) * Number(i.qty)) || 0).toFixed(2)}</span>
             </div>
         `).join('');
 
@@ -11370,10 +11411,10 @@ function renderPedidosOnlineList() {
                     <div class="flex items-start justify-between gap-2 mb-2">
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="font-mono font-black text-xs text-indigo-600 dark:text-indigo-400">#${p.id}</span>
-                                <span class="text-[11px] text-slate-400 font-bold"><i class="fa-regular fa-clock mr-1"></i>${p.fechaStr || ''}</span>
+                                <span class="font-mono font-black text-xs text-indigo-600 dark:text-indigo-400">#${escapeHtml(p.id)}</span>
+                                <span class="text-[11px] text-slate-400 font-bold"><i class="fa-regular fa-clock mr-1"></i>${escapeHtml(p.fechaStr || '')}</span>
                             </div>
-                            <h4 class="text-sm font-black text-slate-900 dark:text-white mt-0.5">${p.cliente}</h4>
+                            <h4 class="text-sm font-black text-slate-900 dark:text-white mt-0.5">${escapeHtml(p.cliente)}</h4>
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
                             ${badgeEstado}
@@ -11384,12 +11425,12 @@ function renderPedidosOnlineList() {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 text-xs mb-3">
                         <div>
                             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Modalidad & Contacto</span>
-                            <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5"><i class="fa-solid fa-motorcycle text-indigo-500 mr-1"></i>${p.entrega || 'Delivery'} ${p.telefono ? '• Tel: ' + p.telefono : ''}</p>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5"><i class="fa-solid fa-location-dot text-rose-500 mr-1"></i>${p.direccion || 'Sin dirección'}</p>
+                            <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5"><i class="fa-solid fa-motorcycle text-indigo-500 mr-1"></i>${escapeHtml(p.entrega || 'Delivery')} ${p.telefono ? '• Tel: ' + escapeHtml(p.telefono) : ''}</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5"><i class="fa-solid fa-location-dot text-rose-500 mr-1"></i>${escapeHtml(p.direccion || 'Sin dirección')}</p>
                         </div>
                         <div>
                             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Forma de Pago</span>
-                            <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5"><i class="fa-solid fa-wallet text-amber-500 mr-1"></i>${p.formaPago || 'Pago Móvil'}</p>
+                            <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5"><i class="fa-solid fa-wallet text-amber-500 mr-1"></i>${escapeHtml(p.formaPago || 'Pago Móvil')}</p>
                             <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-black mt-0.5">Total: ${formatUSD(p.totalUsd || 0)} / ${formatBs(p.totalBs || 0)}</p>
                         </div>
                     </div>
@@ -11407,21 +11448,21 @@ function renderPedidosOnlineList() {
                 <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
                     <div class="flex items-center gap-1.5">
                         ${waLink ? `
-                            <a href="${waLink}" target="_blank" class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 transition-colors">
+                            <a href="${escapeHtml(waLink)}" rel="noopener noreferrer" target="_blank" class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 transition-colors">
                                 <i class="fa-brands fa-whatsapp"></i> Chat WhatsApp
                             </a>
                         ` : ''}
                         ${isPendiente ? `
-                            <button type="button" onclick="marcarPedidoCompletado('${p.id}')" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-emerald-100 dark:bg-slate-700 dark:hover:bg-emerald-950 text-slate-700 hover:text-emerald-700 dark:text-slate-300 dark:hover:text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-colors" title="Marcar como despachado">
+                            <button type="button" onclick="marcarPedidoCompletado('${idSeguro}')" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-emerald-100 dark:bg-slate-700 dark:hover:bg-emerald-950 text-slate-700 hover:text-emerald-700 dark:text-slate-300 dark:hover:text-emerald-300 font-bold text-xs flex items-center gap-1.5 transition-colors" title="Marcar como despachado">
                                 <i class="fa-solid fa-check text-xs"></i> Despachado
                             </button>
-                            <button type="button" onclick="cancelarPedidoOnline('${p.id}')" class="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-100 dark:bg-slate-700 dark:hover:bg-rose-950 text-slate-400 hover:text-rose-600 font-bold text-xs transition-colors" title="Cancelar pedido">
+                            <button type="button" onclick="cancelarPedidoOnline('${idSeguro}')" class="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-rose-100 dark:bg-slate-700 dark:hover:bg-rose-950 text-slate-400 hover:text-rose-600 font-bold text-xs transition-colors" title="Cancelar pedido">
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>
                         ` : ''}
                     </div>
 
-                    <button type="button" onclick="cargarPedidoAlPOS('${p.id}')" class="animated-btn px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all">
+                    <button type="button" onclick="cargarPedidoAlPOS('${idSeguro}')" class="animated-btn px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all">
                         <i class="fa-solid fa-cash-register text-xs"></i> Cargar al Carrito (POS)
                     </button>
                 </div>

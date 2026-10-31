@@ -386,7 +386,37 @@ service cloud.firestore {
         // deniega en silencio (el .catch de app.js:8200 solo hace warn).
         allow update: if esMiembro(negocioId)
                       && cambiados().hasOnly(['estado', 'completadoEn', 'despachadoPor']);
-        allow create, delete: if false;
+        // CREACIÓN PÚBLICA (catalogo.html, sin sesión). Solo se acepta un pedido
+        // con la forma exacta que envía el catálogo: campos permitidos, estado
+        // 'pendiente', id = id del documento y límites de tamaño. Como es
+        // create-only, un anónimo nunca puede sobrescribir ni leer pedidos.
+        // Limitación: Firestore no valida el contenido de cada ítem de la lista;
+        // por eso el POS escapa todo al pintarlo (escapeHtml). Para frenar el
+        // spam masivo se recomienda activar Firebase App Check.
+        function pedidoWebValido(negocioId, pedidoId) {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['id','fechaStr','timestamp','cliente','telefono','entrega',
+                                   'direccion','formaPago','items','totalUsd','totalBs','tasaBcv',
+                                   'estado','negocioId','canal'])
+              && d.keys().hasAll(['id','cliente','telefono','entrega','formaPago','items','totalUsd','estado','negocioId'])
+              && pedidoId.matches('WEB-[0-9]{6}')
+              && d.id == pedidoId
+              && d.negocioId == negocioId
+              && d.estado == 'pendiente'
+              && d.cliente is string && d.cliente.size() >= 1 && d.cliente.size() <= 80
+              && d.telefono is string && d.telefono.size() <= 30
+              && d.entrega in ['Delivery', 'Retiro en Tienda']
+              && d.formaPago in ['Pago Móvil', 'Efectivo USD', 'Efectivo Bs', 'Punto de Venta']
+              && d.items is list && d.items.size() > 0 && d.items.size() <= 100
+              && d.totalUsd is number && d.totalUsd >= 0 && d.totalUsd <= 100000
+              && (!('direccion' in d) || (d.direccion is string && d.direccion.size() <= 300))
+              && (!('totalBs' in d) || (d.totalBs is number && d.totalBs >= 0))
+              && (!('timestamp' in d) || d.timestamp == request.time)
+              && (!('canal' in d) || (d.canal is string && d.canal.size() <= 60))
+              && (!('fechaStr' in d) || (d.fechaStr is string && d.fechaStr.size() <= 40));
+        }
+        allow create: if pedidoWebValido(negocioId, pedidoId);
+        allow delete: if false;
       }
     }
 

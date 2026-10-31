@@ -607,6 +607,8 @@
                 const catSet = new Set();
                 snap.forEach(doc => {
                     const p = { id: doc.id, ...doc.data() };
+                    // La proyección pública trae un stock acotado (stockPublico); el resto del código usa p.stock
+                    if (p.stock === undefined && p.stockPublico !== undefined) p.stock = p.stockPublico;
                     // Proyección pública usa 'disponible: true' o 'activo !== false'; products privado usa 'stock > 0'
                     const estaDisponible = (p.disponible !== undefined) ? (p.disponible === true && p.activo !== false) : (parseFloat(p.stock) > 0);
                     if (estaDisponible) {
@@ -633,26 +635,13 @@
                 }
             }
 
-            // 1. Intentar cargar la proyección pública (products_public, segura sin exponer costos ni inventario interno)
+            // Catálogo público: SOLO products_public (sin costos ni inventario interno).
+            // Ya no se lee 'products' como respaldo: esa colección es privada.
             db.collection('negocios').doc(negocioId).collection('products_public').onSnapshot((snapPublic) => {
-                if (snapPublic && !snapPublic.empty) {
-                    procesarSnapProductos(snapPublic);
-                    return;
-                }
-                // 2. Fallback de migración: leer de products si aún no existe proyección pública
-                db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snapPriv) => {
-                    procesarSnapProductos(snapPriv);
-                }, (err) => {
-                    console.error("Error al cargar productos fallback:", err);
-                    mostrarErrorCarga();
-                });
+                procesarSnapProductos(snapPublic);
             }, (err) => {
-                db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snapPriv) => {
-                    procesarSnapProductos(snapPriv);
-                }, (err2) => {
-                    console.error("Error al cargar productos:", err2);
-                    mostrarErrorCarga();
-                });
+                console.error("Error al cargar el catálogo:", err);
+                mostrarErrorCarga();
             });
         }
 
