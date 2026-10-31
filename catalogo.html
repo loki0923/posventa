@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Catálogo Online — Tienda</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --apple-radius: 20px;
+            --apple-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        body {
+            background-color: #f8fafc;
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.03) 0%, transparent 50%);
+            background-attachment: fixed;
+            color: #0f172a;
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+        }
+
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Vidrio Especular estilo Apple */
+        .glass-header {
+            background: rgba(255, 255, 255, 0.82);
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+            box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.03);
+        }
+
+        /* Tarjetas de Producto estilo Apple Store / Uber Eats */
+        .cat-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(241, 245, 249, 1);
+            border-top: 1px solid rgba(255, 255, 255, 1);
+            border-radius: 22px;
+            box-shadow: 
+                0 0 0 1px rgba(0, 0, 0, 0.02),
+                0 2px 6px rgba(0, 0, 0, 0.02),
+                0 12px 24px -6px rgba(0, 0, 0, 0.04);
+            transition: all 0.22s var(--apple-spring);
+        }
+        .cat-card:hover {
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: 
+                0 0 0 1px rgba(99, 102, 241, 0.15),
+                0 16px 32px -8px rgba(99, 102, 241, 0.12);
+        }
+
+        /* Pastillas de Categoría */
+        .cat-pill {
+            transition: all 0.2s var(--apple-spring);
+        }
+        .cat-pill:active {
+            transform: scale(0.95);
+        }
+        .cat-pill.active {
+            background: #0f172a !important;
+            color: #ffffff !important;
+            border-color: #0f172a !important;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+        }
+
+        /* Cápsula Flotante del Carrito */
+        .floating-island {
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 
+                0 20px 40px -10px rgba(0, 0, 0, 0.35),
+                0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+
+        /* Efectos Táctiles iOS */
+        .ios-touch:active {
+            transform: scale(0.96);
+            transition: transform 0.12s var(--apple-spring);
+        }
+
+        /* Bottom Sheet Adaptativo en Celulares */
+        @media (max-width: 640px) {
+            #cart-modal {
+                align-items: flex-end !important;
+            }
+            #cart-modal-content {
+                border-radius: 32px 32px 0 0 !important;
+                max-height: 88vh !important;
+                width: 100% !important;
+                margin: 0 !important;
+                border-bottom: none !important;
+                box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2) !important;
+            }
+            .sheet-handle {
+                display: block !important;
+            }
+        }
+
+        .sheet-handle {
+            display: none;
+            width: 36px;
+            height: 5px;
+            background: #cbd5e1;
+            border-radius: 9999px;
+            margin: 0 auto 12px auto;
+        }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col pb-28">
+
+    <!-- HEADER / HERO TIENDA (Apple Glass Specular) -->
+    <header class="sticky top-0 z-40 glass-header">
+        <div class="max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div id="store-logo-box" class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-900 to-indigo-900 text-white flex items-center justify-center font-black shadow-md overflow-hidden shrink-0 border border-white/20">
+                    <i class="fa-solid fa-store text-lg"></i>
+                </div>
+                <div class="overflow-hidden">
+                    <h1 id="store-name" class="font-black text-base md:text-lg text-slate-900 tracking-tight leading-tight truncate">Cargando tienda...</h1>
+                    <p class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span class="text-slate-600">Abierto ahora</span>
+                        <span class="text-slate-300">•</span>
+                        <span id="rate-badge" class="text-emerald-700 bg-emerald-50/80 border border-emerald-200/60 px-2 py-0.5 rounded-full font-black text-[10px] tabular-nums">BCV: ...</span>
+                    </p>
+                </div>
+            </div>
+            
+            <button onclick="openCartModal()" class="ios-touch relative bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-2xl font-black text-xs md:text-sm shadow-md flex items-center gap-2.5 transition-all">
+                <i class="fa-solid fa-basket-shopping text-base text-emerald-400"></i>
+                <span id="header-cart-total" class="tabular-nums font-extrabold">$0.00</span>
+                <span id="header-cart-badge" class="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-black border-2 border-white hidden tabular-nums">0</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- BANNER Y BÚSQUEDA -->
+    <div class="max-w-4xl mx-auto w-full px-4 pt-4">
+        <!-- Input con estética iOS Search -->
+        <div class="relative mb-3.5">
+            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="text" id="search-input" oninput="filtrarProductos()" placeholder="Buscar en el catálogo (ej. harina, queso, café)..." class="w-full pl-11 pr-4 py-3 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl shadow-sm outline-none text-xs md:text-sm font-semibold focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all text-slate-800">
+        </div>
+
+        <!-- CATEGORÍAS TIPO PILL FLOTANTES -->
+        <div id="category-pills" class="flex gap-2 overflow-x-auto pb-2 scrollbar-none py-1">
+            <button onclick="setCategory('todas')" class="cat-pill active px-4 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-sm whitespace-nowrap transition-all">Todas</button>
+        </div>
+    </div>
+
+    <!-- LISTADO DE PRODUCTOS -->
+    <main class="max-w-4xl mx-auto w-full px-4 pt-2 flex-1">
+        <div id="products-loading" class="text-center py-20 text-slate-400 font-bold">
+            <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-3 text-indigo-500"></i>
+            <p class="text-xs uppercase tracking-wider text-slate-500">Cargando inventario disponible...</p>
+        </div>
+        
+        <div id="products-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 hidden"></div>
+
+        <div id="products-empty" class="text-center py-20 text-slate-400 font-bold hidden">
+            <div class="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-300 text-2xl">
+                <i class="fa-solid fa-box-open"></i>
+            </div>
+            <p class="text-slate-600 font-bold text-sm">No se encontraron productos disponibles</p>
+            <p class="text-slate-400 text-xs mt-1">Prueba con otra palabra clave o categoría</p>
+        </div>
+    </main>
+
+    <!-- CÁPSULA FLOTANTE DEL CARRITO (Estilo Dynamic Island) -->
+    <div id="floating-cart-bar" class="fixed bottom-5 left-4 right-4 max-w-md mx-auto floating-island text-white p-3.5 rounded-[26px] flex items-center justify-between z-30 transition-all transform translate-y-28 opacity-0">
+        <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-black text-white shadow-md">
+                <i class="fa-solid fa-cart-shopping text-base"></i>
+            </div>
+            <div>
+                <p id="floating-cart-count" class="text-[11px] text-slate-300 font-bold">0 artículos</p>
+                <h4 id="floating-cart-total" class="text-base font-black text-emerald-400 tabular-nums leading-tight">$0.00 <span class="text-xs font-normal text-slate-300" id="floating-cart-total-bs">(Bs 0.00)</span></h4>
+            </div>
+        </div>
+        <button onclick="openCartModal()" class="ios-touch bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-5 py-2.5 rounded-2xl text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5">
+            Ver Pedido <i class="fa-solid fa-arrow-right text-[11px]"></i>
+        </button>
+    </div>
+
+    <!-- MODAL DETALLE DE CARRITO / BOTTOM SHEET (iOS Style) -->
+    <div id="cart-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 hidden opacity-0 transition-opacity">
+        <div class="bg-white rounded-[28px] p-6 w-full max-w-lg mx-4 max-h-[90vh] flex flex-col transform scale-95 transition-all shadow-2xl border border-slate-100" id="cart-modal-content">
+            
+            <!-- Handle para Bottom Sheet Móvil -->
+            <div class="sheet-handle"></div>
+
+            <div class="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
+                <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs"><i class="fa-solid fa-receipt"></i></span>
+                    <span>Tu Pedido</span>
+                </h3>
+                <button onclick="closeCartModal()" class="ios-touch w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- LISTA DE ITEMS -->
+            <div id="cart-modal-items" class="flex-1 overflow-y-auto py-3 space-y-2.5 divide-y divide-slate-100"></div>
+
+            <!-- TOTALES -->
+            <div class="bg-slate-50 p-4 rounded-2xl mb-3 border border-slate-100 space-y-1.5 shrink-0">
+                <div class="flex justify-between text-xs text-slate-500 font-bold">
+                    <span>Tasa BCV del día:</span>
+                    <span id="checkout-rate-bcv" class="tabular-nums font-bold text-slate-700">Bs 0.00</span>
+                </div>
+                <div class="flex justify-between items-baseline pt-1.5 border-t border-slate-200/60">
+                    <span class="font-black text-slate-900 text-sm">Total a Pagar:</span>
+                    <div class="text-right">
+                        <span id="checkout-total-usd" class="text-2xl font-black text-emerald-600 tabular-nums leading-none">$0.00</span>
+                        <div id="checkout-total-bs" class="text-xs font-bold text-slate-500 tabular-nums mt-0.5">Bs 0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FORMULARIO CLIENTE -->
+            <div class="space-y-2.5 mb-4 shrink-0">
+                <div>
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider ml-1 mb-1">Tu Nombre Completo *</label>
+                    <input type="text" id="cust-name" placeholder="Ej. Juan Pérez" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs text-slate-800 focus:bg-white focus:border-indigo-500 transition-all">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider ml-1 mb-1">Teléfono / WhatsApp *</label>
+                        <input type="tel" id="cust-phone" placeholder="Ej. 0414-1234567" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs text-slate-800 focus:bg-white focus:border-indigo-500 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider ml-1 mb-1">Entrega *</label>
+                        <select id="cust-tipo-entrega" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs text-slate-700 focus:bg-white focus:border-indigo-500 transition-all">
+                            <option value="Delivery">🛵 Delivery</option>
+                            <option value="Retiro en Tienda">🏬 Retiro en Tienda</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider ml-1 mb-1">Forma de Pago *</label>
+                    <select id="cust-metodo-pago" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs text-slate-700 focus:bg-white focus:border-indigo-500 transition-all">
+                        <option value="Pago Móvil">📱 Pago Móvil</option>
+                        <option value="Efectivo USD">💵 Efectivo USD</option>
+                        <option value="Efectivo Bs">💵 Efectivo Bs</option>
+                        <option value="Punto de Venta">💳 Punto en tienda</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider ml-1 mb-1">Dirección / Referencia de entrega</label>
+                    <input type="text" id="cust-address" placeholder="Ej. Calle 3, casa #12, frente al abasto" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium text-xs text-slate-800 focus:bg-white focus:border-indigo-500 transition-all">
+                </div>
+            </div>
+
+            <button onclick="enviarPedidoWhatsApp()" class="ios-touch w-full py-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 text-sm transition-all shrink-0">
+                <i class="fa-brands fa-whatsapp text-lg"></i> Enviar Pedido por WhatsApp
+            </button>
+        </div>
+    </div>
+
+    <!-- SCRIPT LOGICA TIENDA ONLINE -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKRrgpahHpzJOfypAkfGsnQOofhMkHmvk",
+            authDomain: "pos-venta-bodega.firebaseapp.com",
+            projectId: "pos-venta-bodega",
+            storageBucket: "pos-venta-bodega.firebasestorage.app",
+            messagingSenderId: "682865386753",
+            appId: "1:682865386753:web:696cc4d360bd0537812700",
+            measurementId: "G-1CHNJR1GML"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // =================================================================
+        // UTILIDADES DE SEGURIDAD
+        // -----------------------------------------------------------------
+        // ESTA PÁGINA ES PÚBLICA: la abre cualquier cliente, sin cuenta. Y lee
+        // datos que escribe el negocio (y, con las reglas antiguas, cualquier
+        // usuario autenticado de CUALQUIER negocio). Antes todo eso se
+        // interpolaba en innerHTML y en atributos onclick, así que un nombre
+        // de producto, una categoría o un id de documento con comillas se
+        // ejecutaba como código en el navegador de tus clientes.
+        // =================================================================
+
+        // Escapa texto para insertarlo en HTML (o dentro de un atributo).
+        function escHtml(valor) {
+            return String(valor === null || valor === undefined ? '' : valor)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Solo https: o data:image/. Sin esta validación, una imagen con
+        // comillas rompía el atributo e inyectaba HTML, y un "javascript:" se
+        // ejecutaba al asignarlo a img.src.
+        function esUrlImagenSegura(url) {
+            if (typeof url !== 'string') return false;
+            const u = url.trim().toLowerCase();
+            return u.startsWith('https://') || u.startsWith('data:image/');
+        }
+
+        // Devuelve un <img> ya configurado, o null si la URL no es de confianza.
+        function crearImagen(url, clases) {
+            if (!esUrlImagenSegura(url)) return null;
+            const img = document.createElement('img');
+            img.src = url.trim();
+            img.alt = '';
+            img.className = clases || '';
+            img.loading = 'lazy';
+            img.onerror = function () { img.style.display = 'none'; };
+            return img;
+        }
+
+        // El id del negocio llega por la URL. Se valida ANTES de usarlo para
+        // construir rutas de Firestore: un id con "/" rompía la consulta, y no
+        // hay ninguna razón para aceptar cualquier cadena.
+        function negocioIdValido(valor) {
+            return typeof valor === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(valor);
+        }
+
+        // Réplica de normalizarTelefono() de app.js: el teléfono de la tienda
+        // puede estar en formato local ('0414-1234567') y wa.me necesita el
+        // internacional SIN el 0 inicial.
+        // Este archivo es independiente y el proyecto no tiene empaquetador,
+        // así que no hay módulo compartido donde ponerlo una sola vez.
+        function normalizarTelefono(valor, prefijo) {
+            const pre = String(prefijo || '58').replace(/\D/g, '');
+            if (valor === null || valor === undefined) return '';
+            const texto = String(valor).trim();
+            if (!texto) return '';
+            const digitos = texto.replace(/\D/g, '');
+            if (!digitos) return '';
+            if (texto.startsWith('+')) return digitos;
+            if (pre && digitos.startsWith(pre) && digitos.length >= pre.length + 9) return digitos;
+            if (digitos.startsWith('0')) return pre + digitos.slice(1);
+            return pre + digitos;
+        }
+
+        // Parámetro de URL para negocioId (soporta ?negocio= o ?id=)
+        const urlParams = new URLSearchParams(window.location.search);
+        const negocioIdCrudo = urlParams.get('negocio') || urlParams.get('id') || 'bodega-demo';
+        const negocioId = negocioIdValido(negocioIdCrudo) ? negocioIdCrudo : '';
+
+        let productsList = [];
+        let catalogCart = [];
+        let tasaBcv = 36.50;
+        let storeData = {
+            name: 'Bodega & Víveres',
+            rif: '',
+            logo: '',
+            // Vacío a propósito. Antes traía '584120000000' de relleno, así que
+            // `storeData.telefono` NUNCA era falsy y un pedido de una tienda sin
+            // WhatsApp configurado se enviaba a ese número desconocido.
+            telefono: ''
+        };
+        let activeCategory = 'todas';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Si el id del negocio no es válido, no se consulta nada y se
+            // explica al visitante en vez de fallar en silencio.
+            if (!negocioId) {
+                const loading = document.getElementById('products-loading');
+                if (loading) {
+                    loading.textContent = '';
+                    const caja = document.createElement('div');
+                    caja.className = 'p-6 bg-amber-50 border border-amber-200 rounded-3xl max-w-sm mx-auto text-amber-800 shadow-sm';
+                    const t1 = document.createElement('p');
+                    t1.className = 'font-bold text-xs';
+                    t1.textContent = 'Este enlace de catálogo no es válido.';
+                    const t2 = document.createElement('p');
+                    t2.className = 'text-[11px] text-amber-700 mt-1';
+                    t2.textContent = 'Pide a la tienda el enlace correcto.';
+                    caja.append(t1, t2);
+                    loading.appendChild(caja);
+                    loading.classList.remove('hidden');
+                }
+                return;
+            }
+            // Un solo listener delegado por contenedor. Antes cada botón llevaba
+            // el id del producto dentro de onclick="funcion('${p.id}')": un id
+            // con una comilla cerraba la cadena y ejecutaba código. Con
+            // data-accion/data-id ese dato nunca se interpreta como código.
+            const conectarDelegado = (contenedorId) => {
+                const cont = document.getElementById(contenedorId);
+                if (!cont) return;
+                cont.addEventListener('click', (ev) => {
+                    const btn = ev.target.closest('[data-accion]');
+                    if (!btn || !cont.contains(btn)) return;
+                    const id = btn.dataset.id;
+                    const accion = btn.dataset.accion;
+                    if (accion === 'agregar') agregarAlCarrito(id);
+                    else if (accion === 'sumar') modificarItemCarrito(id, 1);
+                    else if (accion === 'restar') modificarItemCarrito(id, -1);
+                });
+            };
+            conectarDelegado('products-grid');
+            conectarDelegado('cart-modal-items');
+
+            await cargarDatosTienda();
+            await cargarTasa();
+            cargarProductos();
+        });
+
+        async function cargarTasa() {
+            try {
+                const res = await fetch('https://ve.dolarapi.com/v1/dolares');
+                if (res.ok) {
+                    const data = await res.json();
+                    const oficial = data.find(d => d.fuente === 'oficial') || data[0];
+                    if (oficial && oficial.promedio) tasaBcv = parseFloat(oficial.promedio);
+                }
+            } catch(e) { console.warn('Usando tasa fallback'); }
+            
+            document.getElementById('rate-badge').textContent = `BCV: Bs ${tasaBcv.toFixed(2)}`;
+            document.getElementById('checkout-rate-bcv').textContent = `Bs ${tasaBcv.toFixed(2)}`;
+        }
+
+        async function cargarDatosTienda() {
+            try {
+                let doc = await db.collection('negocios').doc(negocioId).collection('settings').doc('general').get();
+                if (!doc.exists) {
+                    doc = await db.collection('negocios').doc(negocioId).collection('settings').doc('config').get();
+                }
+                if (doc.exists) {
+                    const data = doc.data();
+                    if (data.storeName) storeData.name = data.storeName;
+                    if (data.storeRif) storeData.rif = data.storeRif;
+                    if (data.storeLogo) storeData.logo = data.storeLogo;
+                    if (data.storePhone) storeData.telefono = data.storePhone;
+                }
+            } catch(e) { console.error(e); }
+
+            document.getElementById('store-name').textContent = storeData.name;
+            document.title = `${storeData.name} — Catálogo Online`;
+            const logoBox = document.getElementById('store-logo-box');
+            if (logoBox) {
+                logoBox.textContent = '';
+                const logo = crearImagen(storeData.logo, 'w-full h-full object-cover');
+                if (logo) logoBox.appendChild(logo);
+            }
+        }
+
+        function cargarProductos() {
+            db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snap) => {
+                productsList = [];
+                const catSet = new Set();
+                snap.forEach(doc => {
+                    const p = { id: doc.id, ...doc.data() };
+                    // Filtrar solo productos con stock disponible
+                    if (parseFloat(p.stock) > 0) {
+                        productsList.push(p);
+                        if (p.categoria) catSet.add(p.categoria);
+                    }
+                });
+
+                document.getElementById('products-loading').classList.add('hidden');
+                renderCategorias(Array.from(catSet));
+                filtrarProductos();
+            }, (err) => {
+                console.error("Error al cargar productos del catálogo:", err);
+                document.getElementById('products-loading').innerHTML = `
+                    <div class="p-6 bg-amber-50 border border-amber-200 rounded-3xl max-w-sm mx-auto text-amber-800 shadow-sm">
+                        <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-600"></i>
+                        <p class="font-bold text-xs">No se pudo cargar el catálogo de este negocio.</p>
+                        <p class="text-[11px] text-amber-700 mt-1">Verifica el enlace o contacta directamente a la tienda.</p>
+                    </div>
+                `;
+            });
+        }
+
+        // Construye las píldoras con createElement + addEventListener.
+        // ANTES se generaba HTML metiendo la categoría dentro de un
+        // onclick="setCategory('...')": una categoría con una comilla simple
+        // cerraba la cadena y ejecutaba código arbitrario en el navegador del
+        // cliente. Ahora la categoría nunca se interpreta como código.
+        function renderCategorias(cats) {
+            const container = document.getElementById('category-pills');
+            if (!container) return;
+
+            const CLASES = 'cat-pill px-4 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 shadow-sm whitespace-nowrap transition-all';
+
+            const crearPildora = (etiqueta, valor, activa) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = CLASES + (activa ? ' active' : '');
+                btn.textContent = etiqueta;          // texto, nunca HTML
+                btn.dataset.categoria = valor;       // dato, nunca código
+                btn.addEventListener('click', () => setCategory(valor));
+                return btn;
+            };
+
+            container.textContent = '';
+            container.appendChild(crearPildora('Todas', 'todas', activeCategory === 'todas'));
+            cats.forEach(c => {
+                const valor = String(c);
+                container.appendChild(
+                    crearPildora(valor, valor, activeCategory.toLowerCase() === valor.toLowerCase())
+                );
+            });
+        }
+
+        function setCategory(cat) {
+            activeCategory = String(cat);
+            document.querySelectorAll('.cat-pill').forEach(btn => {
+                const valor = btn.dataset.categoria || btn.textContent.trim();
+                btn.classList.toggle('active', valor.toLowerCase() === activeCategory.toLowerCase());
+            });
+            filtrarProductos();
+        }
+
+        function filtrarProductos() {
+            const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+            const grid = document.getElementById('products-grid');
+            const emptyEl = document.getElementById('products-empty');
+
+            const filtrados = productsList.filter(p => {
+                // String(...) a la fuerza: si un campo llegara como número,
+                // .toLowerCase() lanzaría y rompería el catálogo entero.
+                const nombre = String(p.nombre || '');
+                const categoria = String(p.categoria || '');
+                const matchName = nombre.toLowerCase().includes(query) || categoria.toLowerCase().includes(query);
+                const matchCat = activeCategory === 'todas' || categoria.toLowerCase() === activeCategory.toLowerCase();
+                return matchName && matchCat;
+            });
+
+            if (filtrados.length === 0) {
+                grid.classList.add('hidden');
+                emptyEl.classList.remove('hidden');
+                return;
+            }
+
+            emptyEl.classList.add('hidden');
+            grid.classList.remove('hidden');
+            grid.textContent = '';
+
+            // Las tarjetas se construyen con createElement + textContent.
+            // ANTES se interpolaba nombre, categoría e imagen en innerHTML, y el
+            // id del producto dentro de onclick="...('${p.id}')". Un documento
+            // de producto con comillas en el id ejecutaba código arbitrario en
+            // el navegador de CUALQUIER cliente que abriera el catálogo.
+            filtrados.forEach(p => {
+                const precioUsd = parseFloat(p.precio) || 0;
+                const precioBs = precioUsd * tasaBcv;
+                const stock = parseFloat(p.stock) || 0;
+                const enCarrito = catalogCart.find(i => i.id === p.id);
+                const cant = enCarrito ? enCarrito.qty : 0;
+
+                const card = document.createElement('div');
+                card.className = 'cat-card p-3.5 flex flex-col justify-between';
+
+                // Imagen (solo https: o data:image/)
+                const img = crearImagen(p.imagen, 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-300');
+                if (img) {
+                    const marco = document.createElement('div');
+                    marco.className = 'w-full h-28 rounded-xl overflow-hidden bg-slate-100 mb-2 relative flex items-center justify-center border border-slate-100';
+                    marco.appendChild(img);
+                    card.appendChild(marco);
+                }
+
+                const cuerpo = document.createElement('div');
+
+                const fila = document.createElement('div');
+                fila.className = 'flex items-center justify-between';
+
+                const cat = document.createElement('span');
+                cat.className = 'text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100/60 px-2 py-0.5 rounded-md';
+                cat.textContent = String(p.categoria || 'General');
+
+                const disp = document.createElement('span');
+                disp.className = 'text-[9px] font-bold text-slate-400 tabular-nums';
+                disp.textContent = `${stock.toFixed(0)} disp.`;
+
+                fila.append(cat, disp);
+
+                const titulo = document.createElement('h3');
+                titulo.className = 'font-extrabold text-xs md:text-sm text-slate-800 mt-2 line-clamp-2 leading-snug';
+                titulo.textContent = String(p.nombre || 'Producto');
+
+                cuerpo.append(fila, titulo);
+
+                const pie = document.createElement('div');
+                pie.className = 'mt-3 pt-2.5 border-t border-slate-100 flex items-end justify-between';
+
+                const precios = document.createElement('div');
+                const pUsd = document.createElement('span');
+                pUsd.className = 'text-base font-black text-slate-900 leading-none tabular-nums';
+                pUsd.textContent = `$${precioUsd.toFixed(2)}`;
+                const pBs = document.createElement('div');
+                pBs.className = 'text-[10px] font-bold text-slate-400 mt-0.5 tabular-nums';
+                pBs.textContent = `Bs ${precioBs.toFixed(2)}`;
+                precios.append(pUsd, pBs);
+                pie.appendChild(precios);
+
+                if (cant > 0) {
+                    const grupo = document.createElement('div');
+                    grupo.className = 'flex items-center gap-1 bg-slate-900 text-white p-1 rounded-xl shadow-sm';
+
+                    const menos = document.createElement('button');
+                    menos.type = 'button';
+                    menos.className = 'ios-touch w-6 h-6 rounded-lg bg-slate-800 text-white font-black text-xs flex items-center justify-center';
+                    menos.textContent = '−';
+                    menos.dataset.accion = 'restar';
+                    menos.dataset.id = String(p.id);
+
+                    const cuenta = document.createElement('span');
+                    cuenta.className = 'text-xs font-black px-1.5 tabular-nums';
+                    cuenta.textContent = String(cant);
+
+                    const mas = document.createElement('button');
+                    mas.type = 'button';
+                    mas.className = 'ios-touch w-6 h-6 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center';
+                    mas.textContent = '+';
+                    mas.dataset.accion = 'sumar';
+                    mas.dataset.id = String(p.id);
+
+                    grupo.append(menos, cuenta, mas);
+                    pie.appendChild(grupo);
+                } else {
+                    const agregar = document.createElement('button');
+                    agregar.type = 'button';
+                    agregar.className = 'ios-touch w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-md transition-all';
+                    agregar.dataset.accion = 'agregar';
+                    agregar.dataset.id = String(p.id);
+                    const icono = document.createElement('i');
+                    icono.className = 'fa-solid fa-plus text-xs';
+                    agregar.appendChild(icono);
+                    pie.appendChild(agregar);
+                }
+
+                card.append(cuerpo, pie);
+                grid.appendChild(card);
+            });
+        }
+
+        function agregarAlCarrito(id) {
+            const p = productsList.find(x => x.id === id);
+            if (!p) return;
+            const existe = catalogCart.find(x => x.id === id);
+            if (existe) {
+                if (existe.qty < (parseFloat(p.stock) || 0)) existe.qty += 1;
+            } else {
+                // Se guarda la imagen: antes no se copiaba y por eso el carrito
+                // nunca mostraba la foto del producto.
+                catalogCart.push({
+                    id: p.id,
+                    nombre: p.nombre,
+                    precio: parseFloat(p.precio) || 0,
+                    tipo: p.tipo,
+                    imagen: p.imagen,
+                    qty: 1
+                });
+            }
+            actualizarUI();
+        }
+
+        function modificarItemCarrito(id, delta) {
+            const idx = catalogCart.findIndex(x => x.id === id);
+            if (idx === -1) return;
+            catalogCart[idx].qty += delta;
+            if (catalogCart[idx].qty <= 0) {
+                catalogCart.splice(idx, 1);
+            }
+            actualizarUI();
+        }
+
+        function actualizarUI() {
+            filtrarProductos();
+            const totalUsd = catalogCart.reduce((sum, item) => sum + (item.precio * item.qty), 0);
+            const totalBs = totalUsd * tasaBcv;
+            const totalCount = catalogCart.reduce((sum, item) => sum + item.qty, 0);
+
+            // Header
+            document.getElementById('header-cart-total').textContent = `$${totalUsd.toFixed(2)}`;
+            const badge = document.getElementById('header-cart-badge');
+            if (totalCount > 0) {
+                badge.textContent = totalCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            // Barra flotante
+            const floatingBar = document.getElementById('floating-cart-bar');
+            if (totalCount > 0) {
+                document.getElementById('floating-cart-count').textContent = `${totalCount} artículo(s)`;
+                const ft = document.getElementById('floating-cart-total');
+                if (ft) {
+                    ft.textContent = `$${totalUsd.toFixed(2)} `;
+                    const spanBs = document.createElement('span');
+                    spanBs.className = 'text-xs font-normal text-slate-300 tabular-nums';
+                    spanBs.textContent = `(Bs ${totalBs.toFixed(2)})`;
+                    ft.appendChild(spanBs);
+                }
+                floatingBar.classList.remove('translate-y-28', 'opacity-0');
+            } else {
+                floatingBar.classList.add('translate-y-28', 'opacity-0');
+            }
+
+            // Modal
+            document.getElementById('checkout-total-usd').textContent = `$${totalUsd.toFixed(2)}`;
+            document.getElementById('checkout-total-bs').textContent = `Bs ${totalBs.toFixed(2)}`;
+
+            const itemsContainer = document.getElementById('cart-modal-items');
+            if (catalogCart.length === 0) {
+                itemsContainer.textContent = '';
+                const vacio = document.createElement('div');
+                vacio.className = 'text-center py-8 text-slate-400 font-bold';
+                const pVacio = document.createElement('p');
+                pVacio.className = 'text-xs';
+                pVacio.textContent = 'Tu carrito está vacío';
+                vacio.appendChild(pVacio);
+                itemsContainer.appendChild(vacio);
+            } else {
+                // Construido con createElement + textContent, y los botones
+                // llevan data-accion/data-id. Antes el id del producto iba
+                // dentro de onclick="...('${i.id}')" y el nombre en innerHTML.
+                itemsContainer.textContent = '';
+                catalogCart.forEach(i => {
+                    const fila = document.createElement('div');
+                    fila.className = 'flex items-center justify-between pt-2.5 gap-2';
+
+                    const izq = document.createElement('div');
+                    izq.className = 'flex items-center gap-2.5 flex-1 pr-2';
+
+                    const img = crearImagen(i.imagen, 'w-full h-full object-cover');
+                    if (img) {
+                        const marco = document.createElement('div');
+                        marco.className = 'w-9 h-9 rounded-xl overflow-hidden bg-slate-100 shrink-0 border border-slate-200';
+                        marco.appendChild(img);
+                        izq.appendChild(marco);
+                    }
+
+                    const datos = document.createElement('div');
+                    const nombre = document.createElement('h4');
+                    nombre.className = 'font-extrabold text-xs text-slate-800 leading-snug';
+                    nombre.textContent = String(i.nombre || 'Producto');
+                    const precio = document.createElement('p');
+                    precio.className = 'text-[11px] text-slate-400 font-bold tabular-nums';
+                    precio.textContent = `$${(Number(i.precio) || 0).toFixed(2)} c/u`;
+                    datos.append(nombre, precio);
+                    izq.appendChild(datos);
+
+                    const der = document.createElement('div');
+                    der.className = 'flex items-center gap-2';
+
+                    const grupo = document.createElement('div');
+                    grupo.className = 'flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl';
+
+                    const menos = document.createElement('button');
+                    menos.type = 'button';
+                    menos.className = 'ios-touch w-6 h-6 rounded-lg bg-white text-slate-700 font-bold text-xs shadow-sm flex items-center justify-center';
+                    menos.textContent = '−';
+                    menos.dataset.accion = 'restar';
+                    menos.dataset.id = String(i.id);
+
+                    const cuenta = document.createElement('span');
+                    cuenta.className = 'text-xs font-black px-1.5 tabular-nums';
+                    cuenta.textContent = String(i.qty);
+
+                    const mas = document.createElement('button');
+                    mas.type = 'button';
+                    mas.className = 'ios-touch w-6 h-6 rounded-lg bg-slate-900 text-white font-bold text-xs shadow-sm flex items-center justify-center';
+                    mas.textContent = '+';
+                    mas.dataset.accion = 'sumar';
+                    mas.dataset.id = String(i.id);
+
+                    grupo.append(menos, cuenta, mas);
+
+                    const subtotal = document.createElement('span');
+                    subtotal.className = 'font-black text-xs text-slate-900 min-w-[50px] text-right tabular-nums';
+                    subtotal.textContent = `$${((Number(i.precio) || 0) * i.qty).toFixed(2)}`;
+
+                    der.append(grupo, subtotal);
+
+                    fila.append(izq, der);
+                    itemsContainer.appendChild(fila);
+                });
+            }
+        }
+
+        function openCartModal() {
+            if (catalogCart.length === 0) {
+                return Swal.fire({
+                    title: 'Carrito Vacío',
+                    text: 'Agrega productos al carrito para continuar.',
+                    icon: 'info',
+                    confirmButtonColor: '#0f172a'
+                });
+            }
+            actualizarUI();
+            const m = document.getElementById('cart-modal'), c = document.getElementById('cart-modal-content');
+            m.classList.remove('hidden');
+            setTimeout(() => { m.classList.remove('opacity-0'); c.classList.remove('scale-95'); }, 10);
+        }
+
+        function closeCartModal() {
+            const m = document.getElementById('cart-modal'), c = document.getElementById('cart-modal-content');
+            m.classList.add('opacity-0'); c.classList.add('scale-95');
+            setTimeout(() => m.classList.add('hidden'), 250);
+        }
+
+        async function enviarPedidoWhatsApp() {
+            const nombre = (document.getElementById('cust-name')?.value || '').trim();
+            const telefono = (document.getElementById('cust-phone')?.value || '').trim();
+            const entrega = document.getElementById('cust-tipo-entrega')?.value || 'Delivery';
+            const pago = document.getElementById('cust-metodo-pago')?.value || 'Pago Móvil';
+            const direccion = (document.getElementById('cust-address')?.value || '').trim();
+
+            if (!nombre) return Swal.fire('Atención', 'Por favor ingresa tu nombre completo', 'warning');
+            if (!telefono) return Swal.fire('Atención', 'Por favor ingresa tu teléfono o WhatsApp de contacto', 'warning');
+            if (entrega === 'Delivery' && !direccion) return Swal.fire('Atención', 'Por favor ingresa tu dirección para el delivery', 'warning');
+
+            const totalUsd = catalogCart.reduce((sum, item) => sum + (item.precio * item.qty), 0);
+            const totalBs = totalUsd * tasaBcv;
+
+            // Generar ID único de pedido online
+            const orderId = 'WEB-' + Date.now().toString().slice(-6);
+            const fechaActualStr = new Date().toLocaleString('es-VE');
+
+            const pedidoData = {
+                id: orderId,
+                fechaStr: fechaActualStr,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                cliente: nombre,
+                telefono: telefono,
+                entrega: entrega,
+                direccion: direccion || (entrega === 'Delivery' ? 'Sin dirección' : 'Retiro en Tienda'),
+                formaPago: pago,
+                items: catalogCart.map(i => ({
+                    id: i.id,
+                    nombre: i.nombre,
+                    precio: parseFloat(i.precio) || 0,
+                    qty: parseInt(i.qty) || 1,
+                    total: parseFloat(((parseFloat(i.precio) || 0) * (parseInt(i.qty) || 1)).toFixed(2))
+                })),
+                totalUsd: parseFloat(totalUsd.toFixed(2)),
+                totalBs: parseFloat(totalBs.toFixed(2)),
+                tasaBcv: tasaBcv,
+                estado: 'pendiente', // 'pendiente', 'completado', 'cancelado'
+                negocioId: negocioId,
+                canal: 'Catálogo Web / WhatsApp'
+            };
+
+            // 1. Intentar guardar en Firestore. Con las reglas actuales esta
+            //    escritura se RECHAZA (la colección exige autenticación y este
+            //    catálogo es público), así que se registra el resultado para no
+            //    mentirle al cliente en el mensaje final.
+            let guardadoEnNube = false;
+            try {
+                await db.collection('negocios').doc(negocioId).collection('pedidos_online').doc(orderId).set(pedidoData);
+                guardadoEnNube = true;
+            } catch (e) {
+                console.warn("No se pudo registrar el pedido en Firestore (se enviará solo por WhatsApp):", e);
+            }
+
+            // 2. Transmisión local para comunicación entre pestañas abiertas en la misma computadora (BroadcastChannel & LocalStorage)
+            try {
+                const channel = new BroadcastChannel('pos_pedidos_channel');
+                channel.postMessage({ type: 'NUEVO_PEDIDO', pedido: pedidoData, negocioId: negocioId });
+                channel.close();
+            } catch(e) {}
+            try {
+                localStorage.setItem('ultimo_pedido_online_' + negocioId, JSON.stringify(pedidoData));
+                localStorage.setItem('ultimo_pedido_timestamp', Date.now().toString());
+            } catch(e) {}
+
+            // 3. Preparar mensaje de WhatsApp
+            let lineas = catalogCart.map(i => `• ${i.qty}x ${i.nombre} - $${(i.precio * i.qty).toFixed(2)}`).join('\n');
+
+            let msg = `🛍️ *¡NUEVO PEDIDO DESDE CATÁLOGO ONLINE! (Ref: #${orderId})*\n\n`;
+            msg += `👤 *Cliente:* ${nombre}\n`;
+            if (telefono) msg += `📞 *Teléfono:* ${telefono}\n`;
+            msg += `🛵 *Tipo de Entrega:* ${entrega}\n`;
+            if (direccion) msg += `📍 *Dirección/Referencia:* ${direccion}\n`;
+            msg += `💳 *Método de Pago:* ${pago}\n\n`;
+            msg += `📦 *PRODUCTOS SOLICITADOS:*\n`;
+            msg += `---------------------------------\n`;
+            msg += lineas + `\n`;
+            msg += `---------------------------------\n`;
+            msg += `💰 *TOTAL A PAGAR: $${totalUsd.toFixed(2)}*\n`;
+            msg += `🇻🇪 *Equivalente en Bs: Bs ${totalBs.toFixed(2)}* (Tasa BCV: ${tasaBcv.toFixed(2)})\n\n`;
+            msg += `_Espero su confirmación para proceder con el despacho. ¡Muchas gracias!_`;
+
+            // El teléfono de la tienda puede estar guardado en formato local
+            // ('0414-1234567'). wa.me necesita el internacional SIN el 0, así
+            // que se normaliza aquí también. (Réplica de normalizarTelefono()
+            // de app.js: este archivo es independiente y el proyecto no tiene
+            // empaquetador, así que no hay módulo compartido.)
+            const phone = normalizarTelefono(storeData.telefono);
+            if (!phone || phone.length < 8) {
+                // Antes había un número de relleno FALSO (584120000000): si la
+                // tienda no tenía teléfono configurado, el pedido se enviaba a
+                // un desconocido. Mejor no enviarlo y decirlo.
+                return Swal.fire({
+                    title: 'La tienda no tiene WhatsApp configurado',
+                    text: 'No podemos enviar tu pedido automáticamente. Contacta a la tienda por otro medio.',
+                    icon: 'warning',
+                    confirmButtonColor: '#0f172a'
+                });
+            }
+            const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+            
+            closeCartModal();
+            window.open(url, '_blank');
+
+            // Mensaje final HONESTO. Antes decía SIEMPRE "notificada en vivo a
+            // la pantalla de la bodega", aunque la escritura en Firestore
+            // hubiera sido rechazada y la bodega no viera nada.
+            Swal.fire({
+                icon: guardadoEnNube ? 'success' : 'info',
+                title: guardadoEnNube ? '¡Pedido Registrado!' : 'Pedido preparado',
+                html: `
+                    <div class="text-left text-xs space-y-2.5 mt-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200">
+                        <div class="flex items-center gap-2 text-emerald-800 font-black">
+                            <i class="fa-solid fa-circle-check text-base text-emerald-600"></i>
+                            <span>Referencia de Pedido: #${escHtml(orderId)}</span>
+                        </div>
+                        <p class="text-slate-600">${guardadoEnNube
+                            ? 'Tu pedido quedó registrado y la bodega lo verá en su pantalla.'
+                            : 'Se abrió WhatsApp con tu pedido ya escrito: <b>pulsa enviar</b> para que la tienda lo reciba.'}</p>
+                        <div class="text-[11px] text-slate-500 pt-1 border-t border-emerald-200/60 flex justify-between">
+                            <span>Total a pagar:</span>
+                            <span class="font-black text-slate-900">$${totalUsd.toFixed(2)} / Bs ${totalBs.toFixed(2)}</span>
+                        </div>
+                    </div>
+                `,
+                confirmButtonText: 'Seguir Comprando',
+                confirmButtonColor: '#059669'
+            });
+
+            catalogCart = [];
+            actualizarUI();
+        }
+    </script>
+</body>
+</html>
