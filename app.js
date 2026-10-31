@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v28 · 31/10/2026 · bloque b: seguridad xss puertas traseras y proyeccion publica';
+const APP_VERSION = 'v29 · 31/10/2026 · bloque c: rediseño pantallas metricas formato numerico menu lateral y contraste';
 
 function pintarVersionApp() {
     try {
@@ -770,7 +770,11 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-container').classList.add('hidden');
         document.getElementById('app-container').classList.remove('hidden');
         document.getElementById('user-display').textContent = isAdmin ? 'Admin' : 'Cajero';
-        document.querySelectorAll('.admin-only').forEach(el => el.style.display = isAdmin ? 'flex' : 'none');
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = isAdmin ? '' : 'none');
+        const repBtnSpan = document.querySelector('#btn-reportes .sidebar-text');
+        if (repBtnSpan) repBtnSpan.textContent = isAdmin ? 'Reportes & Cierre' : 'Cierre de Caja';
+        const repBtn = document.getElementById('btn-reportes');
+        if (repBtn) repBtn.title = isAdmin ? 'Reportes & Cierre' : 'Cierre de Caja';
         if (typeof initMultiBranchSuite === 'function') initMultiBranchSuite();
         if (!isAdmin) switchTab('ventas');
         setupFirebaseListeners();
@@ -1632,7 +1636,7 @@ function updatePOSDashboard() {
         });
     });
     const elVentas = document.getElementById('pos-dash-ventas');
-    if (elVentas) elVentas.textContent = `$${tVentas.toFixed(2)}`;
+    if (elVentas) elVentas.textContent = formatUSD(tVentas);
     let topName = "Ninguno", maxQ = 0;
     for (let name in itemsCount) {
         if (itemsCount[name] > maxQ) {
@@ -1672,7 +1676,11 @@ function switchTab(tabId) {
     if (tabId === 'cocina' && storeConfig.businessType !== 'comida_rapida') {
         return;
     }
-    if (!isAdmin && ['inventario', 'reportes', 'usuarios', 'compras', 'libro-fiscal', 'tienda-online', 'torre-control'].includes(tabId)) {
+    if (!isAdmin && tabId === 'reportes') {
+        abrirModalArqueo30Seg();
+        return;
+    }
+    if (!isAdmin && ['inventario', 'usuarios', 'compras', 'libro-fiscal', 'tienda-online', 'torre-control'].includes(tabId)) {
         return Swal.fire({
             title: 'Acceso Restringido',
             text: 'La Torre de Control Global y funciones administrativas están reservadas exclusivamente para el dueño del negocio.',
@@ -2711,7 +2719,7 @@ function updateBarcodeLiveTotal() {
     }
     let kilos = currentBarcodeUnit === 'kg' ? val : val / 1000;
     const total = kilos * (prod.precio || 0);
-    totalEl.textContent = `$${total.toFixed(2)}`;
+    totalEl.textContent = formatUSD(total);
 }
 
 function openBarcodeModal(id) {
@@ -2721,7 +2729,7 @@ function openBarcodeModal(id) {
     const titleEl = document.getElementById('barcode-prod-title');
     if (titleEl) titleEl.textContent = prod.nombre;
     const badgeEl = document.getElementById('barcode-prod-price-badge');
-    if (badgeEl) badgeEl.textContent = `$${(prod.precio || 0).toFixed(2)} / Kg`;
+    if (badgeEl) badgeEl.textContent = `${formatUSD(prod.precio || 0)} / Kg`;
     document.getElementById('barcode-weight').value = '';
     setBarcodeUnit('kg');
     const m = document.getElementById('barcode-modal');
@@ -2788,12 +2796,12 @@ function printBarcode() {
             ${vencStr}
             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 3px 0; margin: 4px 0;">
                 <span>Peso: ${(weightGrams / 1000).toFixed(3)} Kg</span>
-                <span>$${(prod.precio || 0).toFixed(2)}/Kg</span>
+                <span>${formatUSD(prod.precio || 0)}/Kg</span>
             </div>
             <div style="display: flex; justify-content: center; margin: 4px 0;">
                 <img src="${barcodeSvgDataUrl}" style="max-width: 100%; height: 45px; display: block; margin: 0 auto;" alt="Código">
             </div>
-            <p style="margin: 3px 0 0 0; font-size: 16px; font-weight: 900;">Total: $${((prod.precio || 0) * (weightGrams / 1000)).toFixed(2)}</p>
+            <p style="margin: 3px 0 0 0; font-size: 16px; font-weight: 900;">Total: ${formatUSD((prod.precio || 0) * (weightGrams / 1000))}</p>
         </div>`;
 
     imprimirTicketAislado(labelHtml, { width: '60mm' });
@@ -3093,7 +3101,7 @@ function renderPOSProductsConFiltro(queryNorm = '', categoriaFiltro = 'Todos') {
         const vencInfo = getVencimientoInfo(p.fechaVencimiento);
         let vencBadge = '';
         if (vencInfo && (vencInfo.status === 'critico' || vencInfo.status === 'vencido')) {
-            vencBadge = `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded-md ${vencInfo.status === 'vencido' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}">${vencInfo.status === 'vencido' ? 'VENCIDO' : vencInfo.dias + 'd'}</span>`;
+            vencBadge = `<span class="ml-1 text-xs font-black px-1.5 py-0.5 rounded-md ${vencInfo.status === 'vencido' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}">${vencInfo.status === 'vencido' ? 'VENCIDO' : vencInfo.dias + 'd'}</span>`;
         }
 
         const c = document.createElement('div');
@@ -3122,9 +3130,9 @@ function renderPOSProductsConFiltro(queryNorm = '', categoriaFiltro = 'Todos') {
             <div>
                 ${imgBannerHtml}
                 <div class="flex items-center justify-between gap-1">
-                    <span class="text-[10px] text-primary-600 dark:text-primary-400 font-extrabold uppercase tracking-wider bg-primary-50 dark:bg-primary-950/60 px-2 py-0.5 rounded-lg border border-primary-100/60 dark:border-primary-900/40 truncate max-w-[110px]">${p.categoria || 'General'}</span>
+                    <span class="text-xs text-primary-700 dark:text-primary-300 font-extrabold uppercase tracking-wider bg-primary-50 dark:bg-primary-950/80 px-2 py-0.5 rounded-lg border border-primary-200/60 dark:border-primary-800/50 truncate max-w-[120px]">${p.categoria || 'General'}</span>
                     <div class="flex items-center gap-1">
-                        ${p.marca ? `<span class="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/40 truncate max-w-[80px]">${p.marca}</span>` : ''}
+                        ${p.marca ? `<span class="text-xs font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/50 truncate max-w-[90px]">${p.marca}</span>` : ''}
                         ${vencBadge}
                     </div>
                 </div>
@@ -3133,9 +3141,9 @@ function renderPOSProductsConFiltro(queryNorm = '', categoriaFiltro = 'Todos') {
             <div class="mt-3.5 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-end">
                 <div>
                     <div class="text-emerald-600 dark:text-emerald-400 font-black text-xl tabular-nums leading-tight">${formatUSD(precioNum)}</div>
-                    <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 tabular-nums">${formatBs(precioBs)}</div>
+                    <div class="text-xs font-bold text-slate-600 dark:text-slate-300 tabular-nums">${formatBs(precioBs)}</div>
                 </div>
-                <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-xl tabular-nums shrink-0">${formatQty(stockNum, p.tipo)} ${p.tipo}</span>
+                <span class="text-xs font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700/80 px-2.5 py-1 rounded-xl tabular-nums shrink-0">${formatQty(stockNum, p.tipo)} ${p.tipo}</span>
             </div>`;
         fragment.appendChild(c);
     });
@@ -3371,7 +3379,7 @@ async function openVentaRapidaModal() {
                         <input id="swal-vr-bs" type="number" step="0.1" placeholder="0.00" class="swal2-input !m-0 !w-full !text-base !font-black !text-teal-600">
                     </div>
                 </div>
-                <p class="text-[10px] text-slate-400 font-semibold text-center mt-1">Tasa activa: Bs ${tasa.toFixed(2)} por $</p>
+                <p class="text-[10px] text-slate-400 font-semibold text-center mt-1">Tasa activa: ${formatBs(tasa)} por $</p>
             </div>
         `,
         focusConfirm: false,
@@ -3484,7 +3492,7 @@ function openPesoModal(prodOrId, cartIdx = -1) {
     document.getElementById('peso-modal-tipo').textContent = isWeight ? 'Venta por Peso' : 'Cantidad';
     document.getElementById('peso-modal-stock').textContent = `Stock: ${prod.stock} ${prod.tipo || ''}`;
     document.getElementById('peso-modal-unidad').textContent = prod.tipo || (isWeight ? 'Kg' : 'Und');
-    document.getElementById('peso-modal-precio-unit').textContent = `${precioBase.toFixed(2)} / ${prod.tipo || 'Unidad'}`;
+    document.getElementById('peso-modal-precio-unit').textContent = `${formatUSD(precioBase)} / ${prod.tipo || 'Unidad'}`;
 
     const iconEl = document.getElementById('peso-modal-icon');
     if (iconEl) {
@@ -3971,7 +3979,7 @@ async function promptDiscount() {
     const { value: formValues } = await Swal.fire({
         title: '💸 Aplicar Descuento',
         html: `
-            <p style="font-size:12px; color:#64748b; margin-bottom:8px;">Subtotal: <strong style="color:#10b981;">$${subtotal.toFixed(2)}</strong></p>
+            <p style="font-size:12px; color:#64748b; margin-bottom:8px;">Subtotal: <strong style="color:#10b981;">${formatUSD(subtotal)}</strong></p>
             <p style="font-size:11px; color:#94a3b8; margin-bottom:10px;">Límite: <strong>${maxDiscount}%</strong></p>
             <select id="swal-disc-type" class="swal2-input" style="width:80%; margin-bottom:10px;">
                 <option value="porcentaje">📊 Porcentaje (%)</option>
@@ -3998,7 +4006,7 @@ async function promptDiscount() {
             finalDiscount = subtotal * (formValues.val / 100);
         } else {
             const maxFijo = subtotal * (maxDiscount / 100);
-            if (formValues.val > maxFijo) return Swal.fire('Error', `Límite: $${maxFijo.toFixed(2)}`, 'error');
+            if (formValues.val > maxFijo) return Swal.fire('Error', `Límite: ${formatUSD(maxFijo)}`, 'error');
             finalDiscount = formValues.val;
         }
         if (finalDiscount > subtotal) finalDiscount = subtotal;
@@ -4007,7 +4015,7 @@ async function promptDiscount() {
         Swal.fire({
             icon: 'success',
             title: 'Descuento aplicado',
-            html: `<p>Descuento: <strong style="color:#f59e0b;">$${finalDiscount.toFixed(2)}</strong></p><p style="font-size:12px; color:#64748b;">Total: $${currentSaleTotal.toFixed(2)}</p>`,
+            html: `<p>Descuento: <strong style="color:#f59e0b;">${formatUSD(finalDiscount)}</strong></p><p style="font-size:12px; color:#64748b;">Total: ${formatUSD(currentSaleTotal)}</p>`,
             timer: 1500,
             showConfirmButton: false
         });
@@ -4312,7 +4320,7 @@ function getDenominacionesSugeridasUsd(monto) {
     if (b1 > 0) parts.push(`${b1}x $1`);
     const centavos = Math.round((monto - Math.floor(monto)) * 100);
     if (centavos > 0) parts.push(`+ ${centavos}¢ (difícil en efectivo $)`);
-    return parts.length > 0 ? parts.join(', ') : `$${monto.toFixed(2)}`;
+    return parts.length > 0 ? parts.join(', ') : formatUSD(monto);
 }
 
 function seleccionarOpcionVuelto(metodo) {
@@ -4321,7 +4329,7 @@ function seleccionarOpcionVuelto(metodo) {
 }
 
 function renderAsistenteVueltoHtml(diff, tasa, cliente) {
-    const vueltoBsFormatted = (diff * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2 });
+    const vueltoBsFormatted = formatBs(usdToBs(diff));
     const denominacionesUsd = getDenominacionesSugeridasUsd(diff);
 
     const clienteTel = cliente?.telefono || '';
@@ -4341,7 +4349,7 @@ function renderAsistenteVueltoHtml(diff, tasa, cliente) {
                     <span class="text-[11px] font-black uppercase text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                         <i class="fa-solid fa-dollar-sign text-emerald-500"></i> Entregar en Billetes USD
                     </span>
-                    <span class="text-base font-black text-emerald-600 dark:text-emerald-400 tabular-nums">$${diff.toFixed(2)}</span>
+                    <span class="text-base font-black text-emerald-600 dark:text-emerald-400 tabular-nums">${formatUSD(diff)}</span>
                 </div>
                 <div class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-slate-900/60 p-2 rounded-lg border border-emerald-100 dark:border-emerald-900/50">
                     <span class="font-extrabold text-slate-800 dark:text-slate-200">Billetes sugeridos:</span> ${denominacionesUsd}
@@ -4361,8 +4369,8 @@ function renderAsistenteVueltoHtml(diff, tasa, cliente) {
                     <span class="text-base font-black text-blue-600 dark:text-blue-400 tabular-nums">Bs ${vueltoBsFormatted}</span>
                 </div>
                 <div class="text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white/70 dark:bg-slate-900/60 p-2 rounded-lg border border-blue-100 dark:border-blue-900/50 flex justify-between items-center">
-                    <span>Equivalente en USD: <b class="text-slate-800 dark:text-slate-100">$${diff.toFixed(2)}</b></span>
-                    <span class="text-[10px] text-slate-400 font-bold">Tasa: Bs ${tasa.toFixed(2)}</span>
+                    <span>Equivalente en USD: <b class="text-slate-800 dark:text-slate-100">${formatUSD(diff)}</b></span>
+                    <span class="text-[10px] text-slate-400 font-bold">Tasa: ${formatBs(tasa)}</span>
                 </div>
                 <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 italic font-medium">
                     💵 Entrega el monto exacto en bolívares en efectivo desde tu gaveta.
@@ -4430,7 +4438,7 @@ function renderAsistenteVueltoHtml(diff, tasa, cliente) {
                         <span class="text-[11px] font-black uppercase text-purple-700 dark:text-purple-400 flex items-center gap-1">
                             <i class="fa-solid fa-gift text-purple-500"></i> Acreditar a Favor del Cliente
                         </span>
-                        <span class="text-base font-black text-purple-600 dark:text-purple-400 tabular-nums">+$${diff.toFixed(2)}</span>
+                        <span class="text-base font-black text-purple-600 dark:text-purple-400 tabular-nums">+${formatUSD(diff)}</span>
                     </div>
                     <div class="bg-white/70 dark:bg-slate-900/60 p-2.5 rounded-lg border border-purple-100 dark:border-purple-900/50 space-y-1">
                         <p class="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -4438,11 +4446,11 @@ function renderAsistenteVueltoHtml(diff, tasa, cliente) {
                         </p>
                         ${tieneDeuda ? `
                             <p class="text-[11px] font-extrabold text-amber-600 dark:text-amber-400">
-                                ⚠️ Amortizará su deuda pendiente ($${deudaActual.toFixed(2)}).
+                                ⚠️ Amortizará su deuda pendiente (${formatUSD(deudaActual)}).
                             </p>
                         ` : `
                             <p class="text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                                Saldo actual: <b class="text-emerald-600">$${(cliente.saldoFavorUsd || 0).toFixed(2)}</b> ➔ Nuevo saldo: <b class="text-purple-600">$${((cliente.saldoFavorUsd || 0) + diff).toFixed(2)}</b>
+                                Saldo actual: <b class="text-emerald-600">${formatUSD(cliente.saldoFavorUsd || 0)}</b> ➔ Nuevo saldo: <b class="text-purple-600">${formatUSD((cliente.saldoFavorUsd || 0) + diff)}</b>
                             </p>
                         `}
                     </div>
@@ -4456,7 +4464,7 @@ function renderAsistenteVueltoHtml(diff, tasa, cliente) {
                 <div class="bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 rounded-xl p-3 text-left">
                     <div class="flex items-center justify-between mb-1.5">
                         <span class="text-[11px] font-black uppercase text-purple-700 dark:text-purple-400 flex items-center gap-1">
-                            <i class="fa-solid fa-gift text-purple-500"></i> Saldo a Favor ($${diff.toFixed(2)})
+                            <i class="fa-solid fa-gift text-purple-500"></i> Saldo a Favor (${formatUSD(diff)})
                         </span>
                     </div>
                     <p class="text-xs text-slate-600 dark:text-slate-300 mb-2.5 font-medium">
@@ -4478,7 +4486,7 @@ function renderAsistenteVueltoHtml(diff, tasa, cliente) {
                     <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> Asistente de Vuelto
                 </span>
                 <span class="text-xs font-black text-slate-900 dark:text-white tabular-nums">
-                    Vuelto: <b class="text-indigo-600 dark:text-indigo-400">$${diff.toFixed(2)}</b> (Bs ${vueltoBsFormatted})
+                    Vuelto: <b class="text-indigo-600 dark:text-indigo-400">${formatUSD(diff)}</b> (${vueltoBsFormatted})
                 </span>
             </div>
 
@@ -4572,7 +4580,7 @@ function notificarVueltoPagoMovilWhatsApp() {
     msg += `🏪 *${storeName.toUpperCase()}*\n`;
     msg += `📅 *Fecha:* ${new Date().toLocaleString()}\n`;
     msg += `---------------------------------\n`;
-    msg += `💵 *Vuelto Total:* $${diff.toFixed(2)}\n`;
+    msg += `💵 *Vuelto Total:* ${formatUSD(diff)}\n`;
     msg += `🇻🇪 *Monto Transferido:* *Bs ${montoBs}*\n`;
     msg += `🏦 *Banco:* ${banco}\n`;
     if (ci) msg += `🪪 *Cédula:* ${ci}\n`;
@@ -4717,7 +4725,7 @@ function calculateChange() {
         btn.innerHTML = '<i class="fa-solid fa-check"></i> Procesar Venta <span class="hidden sm:inline-block ml-2 text-xs font-mono font-black bg-emerald-700/60 px-2 py-0.5 rounded-lg border border-emerald-400/40">[F4 / Enter]</span>';
         if (diff < -0.01 && clienteId) {
             sBox.className = "p-3.5 rounded-2xl mb-4 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 font-extrabold text-xs border border-amber-200 dark:border-amber-800/60";
-            sBox.innerHTML = `<i class="fa-solid fa-handshake mr-1 text-amber-600"></i> Venta a Crédito (Fiado): <b>$${Math.abs(diff).toFixed(2)}</b> (Bs ${(Math.abs(diff) * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2 })})`;
+            sBox.innerHTML = `<i class="fa-solid fa-handshake mr-1 text-amber-600"></i> Venta a Crédito (Fiado): <b>${formatUSD(Math.abs(diff))}</b> (${formatBs(usdToBs(Math.abs(diff)))})`;
         } else if (diff > 0.02) {
             sBox.className = "p-3.5 rounded-2xl mb-4 bg-indigo-50/50 dark:bg-indigo-950/40 text-slate-800 dark:text-slate-100 font-extrabold text-xs border border-indigo-200/80 dark:border-indigo-800/60 transition-all";
             sBox.innerHTML = renderAsistenteVueltoHtml(diff, tasa, cliente);
@@ -4725,7 +4733,7 @@ function calculateChange() {
             sBox.className = "p-3.5 rounded-2xl mb-4 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 font-black text-xs border border-emerald-200 dark:border-emerald-800/60";
             let exactMsg = '<i class="fa-solid fa-circle-check mr-1 text-emerald-600"></i> Pago Completo Exacto';
             if (saldoFavorAplicadoVenta > 0) {
-                exactMsg += ` (incluye $${saldoFavorAplicadoVenta.toFixed(2)} saldo a favor)`;
+                exactMsg += ` (incluye ${formatUSD(saldoFavorAplicadoVenta)} saldo a favor)`;
             }
             sBox.innerHTML = exactMsg;
         }
@@ -5458,7 +5466,7 @@ function renderReports() {
                     <td class="py-3 text-xs text-slate-500">${item.fechaStr.split(', ')[1] || item.fechaStr}</td>
                     <td class="py-3 text-xs font-bold text-blue-500">Abono</td>
                     <td class="py-3 text-xs font-medium text-blue-800">Deuda de ${item.clienteNombre}</td>
-                    <td class="py-3 font-black text-blue-600 text-right">+$${(item.montoUsd || 0).toFixed(2)}</td>
+                    <td class="py-3 font-black text-blue-600 text-right">+${formatUSD(item.montoUsd || 0)}</td>
                     <td class="py-3 text-center"><button onclick="deleteAbono('${item.id}')" class="text-rose-500 hover:bg-rose-100 p-2 rounded-lg"><i class="fa-solid fa-trash"></i></button></td>
                 </tr>`;
         }
@@ -5486,18 +5494,20 @@ function renderReports() {
             notaGanancia.classList.add('hidden');
         }
     }
-    setTxt('rep-total-gastos', `-${formatUSD(tGastos)}`);
-    setTxt('rep-total-gastos-bs', `-${formatBsFromUSD(tGastos)}`);
-    setTxt('rep-mermas-usd', `-${formatUSD(tMermas)}`);
-    setTxt('rep-mermas-usd-bs', `-${formatBsFromUSD(tMermas)}`);
+    setTxt('rep-total-gastos', tGastos > 0 ? `-${formatUSD(tGastos)}` : formatUSD(0));
+    setTxt('rep-total-gastos-bs', tGastos > 0 ? `-${formatBsFromUSD(tGastos)}` : formatBs(0));
+    setTxt('rep-mermas-usd', tMermas > 0 ? `-${formatUSD(tMermas)}` : formatUSD(0));
+    setTxt('rep-mermas-usd-bs', tMermas > 0 ? `-${formatBsFromUSD(tMermas)}` : formatBs(0));
     setTxt('rep-ganancia-neta', formatUSD(utilNetaEfectiva));
     setTxt('rep-ganancia-neta-bs', formatBsFromUSD(utilNetaEfectiva));
     setTxt('rep-fiados', formatUSD(tFiados));
     setTxt('rep-fiados-bs', formatBsFromUSD(tFiados));
-    setTxt('rep-descuentos', `-${formatUSD(tDescuentos)}`);
-    setTxt('rep-descuentos-bs', `-${formatBsFromUSD(tDescuentos)}`);
+    setTxt('rep-descuentos', tDescuentos > 0 ? `-${formatUSD(tDescuentos)}` : formatUSD(0));
+    setTxt('rep-descuentos-bs', tDescuentos > 0 ? `-${formatBsFromUSD(tDescuentos)}` : formatBs(0));
+    setTxt('rep-total-descuentos', tDescuentos > 0 ? `-${formatUSD(tDescuentos)}` : formatUSD(0));
+    setTxt('rep-total-descuentos-bs', tDescuentos > 0 ? `-${formatBsFromUSD(tDescuentos)}` : formatBs(0));
     const gn = document.getElementById('rep-ganancia-neta');
-    if (gn) gn.className = utilNetaEfectiva >= 0 ? "text-2xl font-black text-emerald-400" : "text-2xl font-black text-rose-400";
+    if (gn) gn.className = utilNetaEfectiva >= 0 ? "text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight mt-1" : "text-3xl sm:text-4xl font-black text-rose-400 tracking-tight mt-1";
     setTxt('caja-efectivo-usd', formatUSD(cajEfectivoUsd));
     setTxt('caja-zelle', formatUSD(cajZelle));
     setTxt('caja-efectivo-bs', formatBs(cajEfectivoBs));
@@ -5543,30 +5553,36 @@ async function updateDashboardCharts() {
     const sortedProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const topLabels = sortedProducts.map(p => p[0]);
     const topData = sortedProducts.map(p => p[1]);
+    const hasTopData = topLabels.length > 0 && topData.some(v => v > 0);
     const ctxTop = document.getElementById('topProductosChart');
+    const emptyTop = document.getElementById('empty-state-top');
     if (ctxTop) {
-        if (chartTop) chartTop.destroy();
-        if (topLabels.length === 0) {
-            topLabels.push("Sin ventas");
-            topData.push(1);
+        if (!hasTopData) {
+            if (chartTop) { chartTop.destroy(); chartTop = null; }
+            ctxTop.classList.add('hidden');
+            if (emptyTop) emptyTop.classList.remove('hidden');
+        } else {
+            ctxTop.classList.remove('hidden');
+            if (emptyTop) emptyTop.classList.add('hidden');
+            if (chartTop) chartTop.destroy();
+            chartTop = new Chart(ctxTop, {
+                type: 'doughnut',
+                data: {
+                    labels: topLabels,
+                    datasets: [{
+                        data: topData,
+                        backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'],
+                        borderWidth: isDark ? 2 : 0,
+                        borderColor: isDark ? '#1e293b' : '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: textColor, font: { family: "'Inter', sans-serif" } } } }
+                }
+            });
         }
-        chartTop = new Chart(ctxTop, {
-            type: 'doughnut',
-            data: {
-                labels: topLabels,
-                datasets: [{
-                    data: topData,
-                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'],
-                    borderWidth: isDark ? 2 : 0,
-                    borderColor: isDark ? '#1e293b' : '#ffffff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: 'right', labels: { color: textColor, font: { family: "'Inter', sans-serif" } } } }
-            }
-        });
     }
     try {
         const snap = await getDb('cierres').orderBy('timestamp', 'desc').limit(7).get();
@@ -5581,37 +5597,47 @@ async function updateDashboardCharts() {
         const currentSalesUsd = parseFloat(document.getElementById('rep-total-ventas')?.textContent.replace('$', '') || 0);
         labels.push('Hoy');
         data.push(currentSalesUsd);
+        const hasVentasData = data.some(v => v > 0);
         const ctxVentas = document.getElementById('ventasChart');
+        const emptyVentas = document.getElementById('empty-state-ventas');
         if (ctxVentas) {
-            if (chartVentas) chartVentas.destroy();
-            chartVentas = new Chart(ctxVentas, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Ventas USD ($)',
-                        data: data,
-                        borderColor: '#6366f1',
-                        backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true,
-                        pointBackgroundColor: isDark ? '#1e293b' : '#ffffff',
-                        pointBorderColor: '#6366f1',
-                        pointBorderWidth: 2,
-                        pointRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { color: textColor }, grid: { borderDash: [4, 4], color: gridColor } },
-                        x: { ticks: { color: textColor }, grid: { display: false } }
+            if (!hasVentasData) {
+                if (chartVentas) { chartVentas.destroy(); chartVentas = null; }
+                ctxVentas.classList.add('hidden');
+                if (emptyVentas) emptyVentas.classList.remove('hidden');
+            } else {
+                ctxVentas.classList.remove('hidden');
+                if (emptyVentas) emptyVentas.classList.add('hidden');
+                if (chartVentas) chartVentas.destroy();
+                chartVentas = new Chart(ctxVentas, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Ventas USD ($)',
+                            data: data,
+                            borderColor: '#6366f1',
+                            backgroundColor: isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.1)',
+                            borderWidth: 3,
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: isDark ? '#1e293b' : '#ffffff',
+                            pointBorderColor: '#6366f1',
+                            pointBorderWidth: 2,
+                            pointRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { color: textColor }, grid: { borderDash: [4, 4], color: gridColor } },
+                            x: { ticks: { color: textColor }, grid: { display: false } }
+                        }
                     }
-                }
-            });
+                });
+            }
         }
     } catch (error) {
         console.error("Error gráficos:", error);
@@ -6248,7 +6274,7 @@ function calcularMerma() {
     document.getElementById('res-vendido').textContent = `${vendidoHoy.toFixed(3)} Kg`;
     document.getElementById('res-esperado').textContent = `${esperado.toFixed(3)} Kg`;
     document.getElementById('res-dif-peso').textContent = `${diff.toFixed(3)} Kg`;
-    document.getElementById('res-perdida-usd').textContent = `$${activeMermaCalc.costoPerdida.toFixed(2)}`;
+    document.getElementById('res-perdida-usd').textContent = formatUSD(activeMermaCalc.costoPerdida);
     document.getElementById('merma-resultado').classList.remove('hidden');
 }
 
@@ -6302,7 +6328,7 @@ function renderMermasHistory() {
                 <div class="flex items-center gap-4">
                     <div class="text-right">
                         <p class="text-[10px] font-bold uppercase text-slate-400">Pérdida</p>
-                        <span class="text-rose-600 font-black">-$${(m.costoPerdida || 0).toFixed(2)}</span>
+                        <span class="text-rose-600 font-black">-${formatUSD(m.costoPerdida || 0)}</span>
                     </div>
                     <button onclick="deleteMerma('${m.id}')" class="text-rose-400 hover:text-rose-600 w-8 h-8 rounded-full bg-white border border-slate-100 shadow-sm flex items-center justify-center"><i class="fa-solid fa-trash"></i></button>
                 </div>
@@ -7541,7 +7567,7 @@ function openModalCobroWhatsApp(clienteId) {
     }
 
     const elUsd = document.getElementById('cobro-ws-deuda-usd');
-    if (elUsd) elUsd.textContent = `$${deudaUsd.toFixed(2)}`;
+    if (elUsd) elUsd.textContent = formatUSD(deudaUsd);
 
     const elBs = document.getElementById('cobro-ws-deuda-bs');
     if (elBs) elBs.textContent = `Bs ${deudaBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -7984,7 +8010,7 @@ function openAbonoModal(clienteId) {
     if (!c) return;
     if ((c.deudaUsd || 0) <= 0) return Swal.fire('Info', 'Sin deudas', 'info');
     document.getElementById('abono-cliente-id').value = clienteId;
-    document.getElementById('abono-deuda-actual').textContent = `$${c.deudaUsd.toFixed(2)}`;
+    document.getElementById('abono-deuda-actual').textContent = formatUSD(c.deudaUsd);
     document.getElementById('abono-monto').value = '';
     const m = document.getElementById('abono-modal');
     const cont = document.getElementById('abono-modal-content');
@@ -8323,7 +8349,7 @@ function renderOrdenesCompra() {
             <tr class="hover:bg-slate-50/50 transition-colors">
                 <td class="p-4">${o.createdAt ? new Date(o.createdAt.toDate()).toLocaleDateString() : ''}</td>
                 <td class="p-4 font-bold text-slate-700">${o.proveedorNombre}</td>
-                <td class="p-4 font-black">$${(o.total || 0).toFixed(2)}</td>
+                <td class="p-4 font-black">${formatUSD(o.total || 0)}</td>
                 <td class="p-4 text-center">${statusBadge}</td>
                 <td class="p-4 text-center">${btnRecibir}<button onclick="verOrden('${o.id}')" class="text-slate-400 hover:text-primary-500"><i class="fa-solid fa-eye"></i></button></td>
             </tr>`;
@@ -8487,12 +8513,12 @@ function renderOrdenItemsUI() {
                     <td class="py-2 font-bold">${i.productoNombre}</td>
                     <td class="py-2"><input type="number" step="any" min="0.1" value="${i.cantidad}" onchange="currentOrdenItems[${idx}].cantidad=parseFloat(this.value)||1; renderOrdenItemsUI()" class="w-16 px-2 py-1 text-right bg-white border border-slate-200 rounded"></td>
                     <td class="py-2"><input type="number" step="0.01" min="0" value="${i.costoUnitario}" onchange="currentOrdenItems[${idx}].costoUnitario=parseFloat(this.value)||0; renderOrdenItemsUI()" class="w-20 px-2 py-1 text-right bg-white border border-slate-200 rounded"></td>
-                    <td class="py-2 text-right font-bold">$${sub.toFixed(2)}</td>
+                    <td class="py-2 text-right font-bold">${formatUSD(sub)}</td>
                     <td class="py-2 text-center"><button onclick="currentOrdenItems.splice(${idx},1); renderOrdenItemsUI()" class="text-rose-500"><i class="fa-solid fa-xmark"></i></button></td>
                 </tr>`;
         });
     }
-    document.getElementById('orden-total-usd').textContent = `$${total.toFixed(2)}`;
+    document.getElementById('orden-total-usd').textContent = formatUSD(total);
 }
 
 async function procesarOrdenCompra() {
@@ -8757,7 +8783,7 @@ function calcularSugerenciasCompras() {
     const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setTxt('sug-metric-criticos', criticos);
     setTxt('sug-metric-medio', medios);
-    setTxt('sug-metric-inversion', `$${inversionTotal.toFixed(2)}`);
+    setTxt('sug-metric-inversion', formatUSD(inversionTotal));
     // La inversión estimada es un PISO: no incluye los productos sin costo.
     // Se dice explícitamente en vez de rellenar el hueco con un costo inventado.
     const elInv = document.getElementById('sug-metric-inversion');
@@ -11364,7 +11390,7 @@ function renderPedidosOnlineList() {
                         <div>
                             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Forma de Pago</span>
                             <p class="font-bold text-slate-800 dark:text-slate-200 mt-0.5"><i class="fa-solid fa-wallet text-amber-500 mr-1"></i>${p.formaPago || 'Pago Móvil'}</p>
-                            <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-black mt-0.5">Total: $${(p.totalUsd || 0).toFixed(2)} / Bs ${(p.totalBs || 0).toFixed(2)}</p>
+                            <p class="text-[11px] text-emerald-600 dark:text-emerald-400 font-black mt-0.5">Total: ${formatUSD(p.totalUsd || 0)} / ${formatBs(p.totalBs || 0)}</p>
                         </div>
                     </div>
 
@@ -11608,6 +11634,8 @@ function initBusinessMode() {
     const btnMermas = document.getElementById('btn-mermas');
     const badgeNum = document.getElementById('current-order-number-badge');
 
+    document.title = (storeConfig.name && storeConfig.name !== 'GestiónPro') ? `${storeConfig.name} — GestiónPro` : 'GestiónPro';
+    document.title = (storeConfig.name && storeConfig.name !== 'GestiónPro') ? `${storeConfig.name} — GestiónPro` : 'GestiónPro';
     if (mode === 'comida_rapida') {
         if (label) label.textContent = 'Comida Rápida';
         if (icon) icon.className = 'fa-solid fa-hotdog text-amber-500';

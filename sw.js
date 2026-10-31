@@ -6,7 +6,7 @@
 // Al cambiar CACHE_NAME, el evento 'activate' borra las cachés anteriores.
 // Hay que subirlo en CADA despliegue que toque el shell; si no, los equipos
 // siguen con la versión vieja.
-const CACHE_NAME = 'gestionpro-pos-v28';
+const CACHE_NAME = 'gestionpro-pos-v29';
 
 const STATIC_ASSETS = [
     './',

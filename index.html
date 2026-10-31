@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GestiónPro - Bodegas</title>
+    <title>GestiónPro</title>
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#ffffff">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -617,34 +617,61 @@
 
             <!-- Navegación con Scroll Suave e Independiente -->
             <div class="overflow-y-auto flex-1 no-scrollbar py-3">
-                <nav class="flex flex-col gap-1.5 px-3">
-                    <button onclick="switchTab('torre-control')" id="btn-torre-control" title="Torre de Control" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20">
-                        <div class="flex items-center gap-3">
-                            <i class="fa-solid fa-tower-broadcast text-base w-6 text-center text-indigo-500"></i>
-                            <span class="sidebar-text font-black text-indigo-600 dark:text-indigo-400">Torre de Control</span>
+                <nav class="flex flex-col gap-2.5 px-3">
+                    <!-- SECCIÓN: VENDER -->
+                    <div class="sidebar-section">
+                        <p class="sidebar-text px-3.5 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Vender</p>
+                        <div class="flex flex-col gap-1">
+                            <button onclick="switchTab('ventas')" id="btn-ventas" title="Punto de Venta" class="nav-item active flex items-center gap-3 w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-cash-register text-base w-6 text-center text-primary-500"></i> <span class="hidden md:inline sidebar-text">Punto de Venta</span></button>
+                            <button onclick="switchTab('cocina')" id="btn-cocina" title="Plancha / Cocina" class="hidden nav-item flex items-center justify-between w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
+                                <div class="flex items-center gap-3"><i class="fa-solid fa-fire-burner text-base w-6 text-center text-orange-500"></i> <span class="hidden md:inline sidebar-text">Plancha / Cocina</span></div>
+                                <span id="badge-cocina" class="sidebar-text hidden bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
+                            </button>
+                            <button onclick="switchTab('fiados')" id="btn-fiados" title="Cuaderno Fiados" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
+                                <div class="flex items-center gap-3"><i class="fa-solid fa-book-bookmark text-base w-6 text-center text-amber-500"></i> <span class="hidden md:inline sidebar-text">Cuaderno Fiados</span></div>
+                                <span id="badge-fiados" class="sidebar-text hidden bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
+                            </button>
+                            <button onclick="switchTab('clientes')" id="btn-clientes" title="Clientes" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-address-book text-base w-6 text-center text-sky-500"></i> <span class="hidden md:inline sidebar-text">Clientes</span></button>
                         </div>
-                        <span class="sidebar-text text-[9px] bg-indigo-500 text-white font-black px-2 py-0.5 rounded-full shadow-xs">GLOBAL</span>
-                    </button>
-                    <button onclick="switchTab('ventas')" id="btn-ventas" title="Punto de Venta" class="nav-item active flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-cash-register text-base w-6 text-center text-primary-500"></i> <span class="hidden md:inline sidebar-text">Punto de Venta</span></button>
-                    <button onclick="switchTab('cocina')" id="btn-cocina" title="Plancha / Cocina" class="hidden nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
-                        <div class="flex items-center gap-3"><i class="fa-solid fa-fire-burner text-base w-6 text-center text-orange-500"></i> <span class="hidden md:inline sidebar-text">Plancha / Cocina</span></div>
-                        <span id="badge-cocina" class="sidebar-text hidden bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
-                    </button>
-                    <button onclick="switchTab('fiados')" id="btn-fiados" title="Cuaderno Fiados" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
-                        <div class="flex items-center gap-3"><i class="fa-solid fa-book-bookmark text-base w-6 text-center text-amber-500"></i> <span class="hidden md:inline sidebar-text">Cuaderno Fiados</span></div>
-                        <span id="badge-fiados" class="sidebar-text hidden bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
-                    </button>
-                    <button onclick="switchTab('clientes')" id="btn-clientes" title="Clientes" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-address-book text-base w-6 text-center text-sky-500"></i> <span class="hidden md:inline sidebar-text">Clientes</span></button>
-                    <button onclick="switchTab('inventario')" id="btn-inventario" title="Inventario" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
-                        <div class="flex items-center gap-3"><i class="fa-solid fa-boxes-stacked text-base w-6 text-center text-amber-500"></i> <span class="hidden md:inline sidebar-text">Inventario</span></div>
-                        <span id="badge-stock" class="sidebar-text hidden bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
-                    </button>
-                    <button onclick="switchTab('compras')" id="btn-compras" title="Compras" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-truck-fast text-base w-6 text-center text-teal-500"></i> <span class="hidden md:inline sidebar-text">Compras</span></button>
-                    <button onclick="switchTab('mermas')" id="btn-mermas" title="Mermas" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-scale-unbalanced text-base w-6 text-center text-rose-500"></i> <span class="hidden md:inline sidebar-text">Mermas</span></button>
-                    <button onclick="switchTab('reportes')" id="btn-reportes" title="Reportes & Cierre" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-chart-pie text-base w-6 text-center text-violet-500"></i> <span class="hidden md:inline sidebar-text">Reportes & Cierre</span></button>
-                    <button onclick="openLibroVentasModal()" id="btn-libro-fiscal" title="Libro de Ventas" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-file-invoice-dollar text-base w-6 text-center text-indigo-500"></i> <span class="hidden md:inline sidebar-text">Libro de Ventas</span></div> <span class="sidebar-text text-[9px] bg-slate-500/10 text-slate-600 dark:text-slate-400 font-black px-2 py-0.5 rounded-full border border-slate-500/20">Referencial</span></button>
-                    <button onclick="openTiendaOnlineModal()" id="btn-tienda-online" title="Tienda Online" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-globe text-base w-6 text-center text-emerald-500"></i> <span class="hidden md:inline sidebar-text">Tienda Online</span></div> <span class="sidebar-text text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black px-2 py-0.5 rounded-full border border-emerald-500/20">Web</span></button>
-                    <button onclick="switchTab('usuarios')" id="btn-usuarios" title="Usuarios" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-users text-base w-6 text-center text-fuchsia-500"></i> <span class="hidden md:inline sidebar-text">Usuarios</span></button>
+                    </div>
+
+                    <!-- SECCIÓN: INVENTARIO -->
+                    <div class="sidebar-section admin-only">
+                        <p class="sidebar-text px-3.5 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Inventario</p>
+                        <div class="flex flex-col gap-1">
+                            <button onclick="switchTab('inventario')" id="btn-inventario" title="Inventario" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
+                                <div class="flex items-center gap-3"><i class="fa-solid fa-boxes-stacked text-base w-6 text-center text-amber-500"></i> <span class="hidden md:inline sidebar-text">Inventario</span></div>
+                                <span id="badge-stock" class="sidebar-text hidden bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
+                            </button>
+                            <button onclick="switchTab('compras')" id="btn-compras" title="Compras" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-truck-fast text-base w-6 text-center text-teal-500"></i> <span class="hidden md:inline sidebar-text">Compras</span></button>
+                            <button onclick="switchTab('mermas')" id="btn-mermas" title="Mermas" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-scale-unbalanced text-base w-6 text-center text-rose-500"></i> <span class="hidden md:inline sidebar-text">Mermas</span></button>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN: FINANZAS -->
+                    <div class="sidebar-section">
+                        <p class="sidebar-text px-3.5 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Finanzas</p>
+                        <div class="flex flex-col gap-1">
+                            <button onclick="switchTab('reportes')" id="btn-reportes" title="Reportes & Cierre" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-chart-pie text-base w-6 text-center text-violet-500"></i> <span class="hidden md:inline sidebar-text">Reportes & Cierre</span></button>
+                            <button onclick="openLibroVentasModal()" id="btn-libro-fiscal" title="Libro de Ventas" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-file-invoice-dollar text-base w-6 text-center text-indigo-500"></i> <span class="hidden md:inline sidebar-text">Libro de Ventas</span></div> <span class="sidebar-text text-[9px] bg-slate-500/10 text-slate-600 dark:text-slate-400 font-black px-2 py-0.5 rounded-full border border-slate-500/20">Referencial</span></button>
+                            <button onclick="switchTab('torre-control')" id="btn-torre-control" title="Torre de Control" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20">
+                                <div class="flex items-center gap-3">
+                                    <i class="fa-solid fa-tower-broadcast text-base w-6 text-center text-indigo-500"></i>
+                                    <span class="sidebar-text font-black text-indigo-600 dark:text-indigo-400">Torre Control</span>
+                                </div>
+                                <span class="sidebar-text text-[9px] bg-indigo-500 text-white font-black px-2 py-0.5 rounded-full shadow-xs">GLOBAL</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN: ADMINISTRACIÓN -->
+                    <div class="sidebar-section admin-only">
+                        <p class="sidebar-text px-3.5 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">Administración</p>
+                        <div class="flex flex-col gap-1">
+                            <button onclick="openTiendaOnlineModal()" id="btn-tienda-online" title="Tienda Online" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-globe text-base w-6 text-center text-emerald-500"></i> <span class="hidden md:inline sidebar-text">Tienda Online</span></div> <span class="sidebar-text text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black px-2 py-0.5 rounded-full border border-emerald-500/20">Web</span></button>
+                            <button onclick="switchTab('usuarios')" id="btn-usuarios" title="Usuarios" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-2.5 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-users text-base w-6 text-center text-fuchsia-500"></i> <span class="hidden md:inline sidebar-text">Usuarios</span></button>
+                        </div>
+                    </div>
                 </nav>
             </div>
             
@@ -749,10 +776,6 @@
                         <span id="badge-pedidos-online" class="hidden min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-bounce shadow-xs">0</span>
                     </button>
 
-                    <button onclick="cerrarSesion()" title="Cerrar Sesión del Turno" class="flex items-center gap-1.5 bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-2xs transition-all active:scale-95">
-                        <i class="fa-solid fa-right-from-bracket text-[11px]"></i>
-                        <span class="hidden sm:inline">Salir</span>
-                    </button>
                 </div>
             </header>
 
@@ -909,7 +932,7 @@
                                     </div>
                                     <div class="flex justify-between items-center mt-1">
                                         <span class="text-[11px] font-bold text-slate-400 dark:text-slate-500">Equiv. Bolívares</span>
-                                        <span class="text-base font-black text-slate-800 dark:text-slate-200 tabular-nums" id="cart-total-bs">Bs 0.00</span>
+                                        <span class="text-base font-black text-slate-800 dark:text-slate-200 tabular-nums" id="cart-total-bs">Bs 0,00</span>
                                     </div>
                                 </div>
                                 <button onclick="openPaymentModal()" class="w-full animated-btn bg-gradient-to-r from-primary-600 via-indigo-600 to-purple-600 hover:from-primary-500 hover:to-purple-500 text-white font-black py-3.5 rounded-xl shadow-lg shadow-primary-500/25 flex items-center justify-center gap-2 text-base mb-2">
@@ -1086,7 +1109,7 @@
                                     <i class="fa-solid fa-hand-holding-dollar text-amber-500 text-sm"></i>
                                 </div>
                                 <h3 class="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight" id="fiados-total-usd">$0.00</h3>
-                                <p class="text-[11px] font-bold text-amber-700 dark:text-amber-400 mt-0.5" id="fiados-total-bs">Bs 0.00</p>
+                                <p class="text-[11px] font-bold text-amber-700 dark:text-amber-400 mt-0.5" id="fiados-total-bs">Bs 0,00</p>
                             </div>
 
                             <div class="bg-gradient-to-br from-rose-500/10 to-red-500/10 dark:from-rose-950/40 dark:to-red-950/30 p-4 rounded-2xl border border-rose-200/80 dark:border-rose-800/60 shadow-xs">
@@ -1112,7 +1135,7 @@
                                     <span class="text-[10px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-400">Tasa Oficial BCV</span>
                                     <i class="fa-solid fa-scale-balanced text-indigo-500 text-sm"></i>
                                 </div>
-                                <h3 class="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums tracking-tight" id="fiados-tasa-bcv">Bs 0.00</h3>
+                                <h3 class="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums tracking-tight" id="fiados-tasa-bcv">Bs 0,00</h3>
                                 <p class="text-[11px] font-medium text-slate-400">Conversión exacta en cobranza</p>
                             </div>
                         </div>
@@ -1259,7 +1282,7 @@
                       <div class="flex justify-between items-center mb-6">
                           <h2 class="text-3xl font-extrabold text-slate-800">Proveedores & Compras</h2>
                           <div class="flex flex-wrap gap-3 justify-end">
-                              <button onclick="openProveedorModal()" class="animated-btn bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-slate-300 transition-colors"><i class="fa-solid fa-user-tie"></i> Nuevo Proveedor</button>
+                              <button id="btn-nuevo-proveedor" onclick="openProveedorModal()" class="animated-btn bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600 px-4 py-2 rounded-xl font-extrabold shadow-xs transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-user-tie text-primary-500"></i> Nuevo Proveedor</button>
                               <button onclick="openOrdenCompraModal()" class="animated-btn bg-gradient-to-r from-primary-600 to-purple-600 text-white px-5 py-2.5 rounded-xl shadow-lg flex items-center gap-2 font-bold"><i class="fa-solid fa-file-invoice-dollar"></i> Nueva Orden</button>
                           </div>
                       </div>
@@ -1300,42 +1323,108 @@
                   <!-- REPORTES -->
                 <section id="tab-reportes" class="tab-content">
                     <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-3xl font-extrabold text-slate-800">Métricas Financieras</h2>
+                        <h2 class="text-3xl font-extrabold text-slate-800 dark:text-slate-100">Métricas Financieras</h2>
                         <div class="flex flex-wrap gap-2.5 justify-end">
-                            <button onclick="abrirModalArqueo30Seg()" class="animated-btn bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white px-4 py-2 rounded-xl font-black shadow-lg shadow-rose-600/25 flex items-center gap-2 text-xs md:text-sm">
+                            <button onclick="abrirModalArqueo30Seg()" class="animated-btn bg-gradient-to-r from-rose-600 via-rose-500 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white px-4 py-2.5 rounded-xl font-black shadow-lg shadow-rose-600/25 flex items-center gap-2 text-xs md:text-sm">
                                 <i class="fa-solid fa-bolt-lightning text-amber-300"></i> Arqueo Diario (30 Segs)
                             </button>
-                            <button onclick="verHistorialCierres()" class="animated-btn bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3.5 py-2 rounded-xl font-bold text-xs shadow-sm hover:bg-slate-300 transition-colors"><i class="fa-solid fa-clock-rotate-left"></i> Historial</button>
-                            <button onclick="openGastoModal()" class="animated-btn bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl font-bold text-xs shadow-lg"><i class="fa-solid fa-money-bill-transfer"></i> Gasto</button>
-                            <button onclick="imprimirCorteZ()" class="animated-btn bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2 rounded-xl font-bold text-xs shadow-lg"><i class="fa-solid fa-print"></i> Corte Z</button>
-                            <button onclick="enviarCierreWhatsApp()" class="animated-btn bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl font-bold text-xs shadow-lg flex items-center gap-1.5"><i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp</button>
+                            <button onclick="verHistorialCierres()" class="animated-btn bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"><i class="fa-solid fa-clock-rotate-left"></i> Historial</button>
+                            <button onclick="openGastoModal()" class="animated-btn bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"><i class="fa-solid fa-money-bill-transfer text-amber-500"></i> Gasto</button>
+                            <button onclick="imprimirCorteZ()" class="animated-btn bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"><i class="fa-solid fa-print"></i> Corte Z</button>
+                            <button onclick="enviarCierreWhatsApp()" class="animated-btn bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 px-3.5 py-2 rounded-xl font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"><i class="fa-brands fa-whatsapp text-emerald-500 text-sm"></i> WhatsApp</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 lg:grid-cols-7 gap-3 mb-8">
-                        <div class="bg-primary-600 text-white p-4 rounded-3xl shadow-sm"><p class="text-[10px] font-bold uppercase">Ventas Brutas</p><h3 class="text-xl font-black" id="rep-total-ventas">$0.00</h3><p class="text-xs text-primary-200 font-medium mt-1" id="rep-total-ventas-bs">Bs 0.00</p></div>
-<div class="bg-rose-500 text-white p-4 rounded-3xl shadow-sm"><p class="text-[10px] font-bold uppercase">Descuentos</p><h3 class="text-xl font-black" id="rep-total-descuentos">-$0.00</h3><p class="text-xs text-rose-200 font-medium mt-1" id="rep-total-descuentos-bs">Bs 0.00</p></div>
-                        <div class="bg-indigo-500 text-white p-4 rounded-3xl shadow-sm"><p class="text-[10px] font-bold uppercase">Ventas Contado</p><h3 class="text-xl font-black" id="rep-ventas-contado">$0.00</h3><p class="text-xs text-indigo-200 font-medium mt-1" id="rep-ventas-contado-bs">Bs 0.00</p></div>
-                        <div class="bg-emerald-500 text-white p-4 rounded-3xl shadow-sm"><p class="text-[10px] font-bold uppercase">Utilidad Bruta</p><h3 class="text-xl font-black" id="rep-total-ganancia">$0.00</h3><p class="text-xs text-emerald-200 font-medium mt-1" id="rep-total-ganancia-bs">Bs 0.00</p><p class="text-[9px] font-bold text-emerald-100 mt-1 leading-tight hidden" id="rep-ganancia-nota"></p></div>
-                        <div class="bg-amber-500 text-white p-4 rounded-3xl shadow-sm"><p class="text-[10px] font-bold uppercase">Gastos</p><h3 class="text-xl font-black" id="rep-total-gastos">-$0.00</h3><p class="text-xs text-amber-200 font-medium mt-1" id="rep-total-gastos-bs">Bs 0.00</p></div>
-                        <div class="bg-rose-500 text-white p-4 rounded-3xl shadow-sm"><p class="text-[10px] font-bold uppercase">Mermas</p><h3 class="text-xl font-black" id="rep-mermas-usd">-$0.00</h3><p class="text-xs text-rose-200 font-medium mt-1" id="rep-mermas-usd-bs">Bs 0.00</p></div>
-                        <div class="bg-slate-800 text-white p-4 rounded-3xl shadow-md border border-emerald-500/30"><p class="text-[10px] text-emerald-400 font-bold uppercase">Ganancia Neta (Efectiva)</p><h3 class="text-2xl font-black text-emerald-400" id="rep-ganancia-neta">$0.00</h3><p class="text-xs text-slate-400 font-medium mt-1" id="rep-ganancia-neta-bs">Bs 0.00</p></div>
-                    </div>
+                    <!-- Tarjeta Principal Hero: Ganancia Neta y 6 Tarjetas Neutras -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6">
+                        <!-- Ganancia Neta Destacada -->
+                        <div class="lg:col-span-4 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-indigo-500/30 flex flex-col justify-between relative overflow-hidden">
+                            <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-2">
+                                    <span class="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/60 px-2.5 py-0.5 rounded-full">
+                                        <i class="fa-solid fa-star text-[10px]"></i> Métrica Principal
+                                    </span>
+                                    <span class="text-[10px] font-bold text-slate-400">Efectiva en Caja</span>
+                                </div>
+                                <p class="text-xs font-bold text-slate-300 uppercase tracking-wide">Ganancia Neta</p>
+                                <h3 class="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight mt-1" id="rep-ganancia-neta">$0,00</h3>
+                            </div>
+                            <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+                                <span class="text-xs text-slate-400 font-medium">Equivalente BCV:</span>
+                                <span class="text-sm font-black text-slate-200 tabular-nums" id="rep-ganancia-neta-bs">Bs 0,00</span>
+                            </div>
+                        </div>
+
+                        <!-- 6 Tarjetas Neutras (Color solo en el número) -->
+                        <div class="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div class="bg-white/80 dark:bg-slate-800/80 p-4 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ventas Brutas</p>
+                                <h3 class="text-xl font-black text-slate-800 dark:text-slate-100 my-1 tabular-nums" id="rep-total-ventas">$0,00</h3>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 font-bold tabular-nums" id="rep-total-ventas-bs">Bs 0,00</p>
+                            </div>
+                            <div class="bg-white/80 dark:bg-slate-800/80 p-4 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Ventas Contado</p>
+                                <h3 class="text-xl font-black text-slate-800 dark:text-slate-100 my-1 tabular-nums" id="rep-ventas-contado">$0,00</h3>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 font-bold tabular-nums" id="rep-ventas-contado-bs">Bs 0,00</p>
+                            </div>
+                            <div class="bg-white/80 dark:bg-slate-800/80 p-4 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Utilidad Bruta</p>
+                                <h3 class="text-xl font-black text-emerald-600 dark:text-emerald-400 my-1 tabular-nums" id="rep-total-ganancia">$0,00</h3>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 font-bold tabular-nums" id="rep-total-ganancia-bs">Bs 0,00</p>
+                                <p class="text-[9px] font-bold text-amber-600 dark:text-amber-400 mt-1 leading-tight hidden" id="rep-ganancia-nota"></p>
+                            </div>
+                            <div class="bg-white/80 dark:bg-slate-800/80 p-4 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Descuentos</p>
+                                <h3 class="text-xl font-black text-rose-600 dark:text-rose-400 my-1 tabular-nums" id="rep-total-descuentos">$0,00</h3>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 font-bold tabular-nums" id="rep-total-descuentos-bs">Bs 0,00</p>
+                            </div>
+                            <div class="bg-white/80 dark:bg-slate-800/80 p-4 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Gastos Caja</p>
+                                <h3 class="text-xl font-black text-rose-600 dark:text-rose-400 my-1 tabular-nums" id="rep-total-gastos">$0,00</h3>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 font-bold tabular-nums" id="rep-total-gastos-bs">Bs 0,00</p>
+                            </div>
+                            <div class="bg-white/80 dark:bg-slate-800/80 p-4 rounded-2xl shadow-xs border border-slate-200/80 dark:border-slate-700/60 flex flex-col justify-between">
+                                <p class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Mermas / Bajas</p>
+                                <h3 class="text-xl font-black text-rose-600 dark:text-rose-400 my-1 tabular-nums" id="rep-mermas-usd">$0,00</h3>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 font-bold tabular-nums" id="rep-mermas-usd-bs">Bs 0,00</p>
+                            </div>
+                        </div>
                     <div class="glass-panel border-l-4 border-amber-500 p-4 rounded-xl mb-8 flex justify-between items-center bg-amber-50/50">
                         <div><p class="text-xs font-bold text-amber-600 uppercase">Cuentas por Cobrar (Fiados del día)</p><h3 class="text-2xl font-black text-slate-800" id="rep-fiados">$0.00</h3></div>
-                        <div class="text-right"><p class="text-sm font-semibold text-slate-500">Equivalente</p><p class="text-lg font-bold text-slate-600" id="rep-fiados-bs">Bs 0.00</p></div>
+                        <div class="text-right"><p class="text-sm font-semibold text-slate-500">Equivalente</p><p class="text-lg font-bold text-slate-600" id="rep-fiados-bs">Bs 0,00</p></div>
                     </div>
                     
-                                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                         <div class="glass-panel rounded-3xl p-6 lg:col-span-2 flex flex-col h-[350px]">
-                            <h3 class="text-xl font-bold mb-4 text-slate-800 shrink-0">Ventas Semanales</h3>
-                            <div class="relative flex-1 w-full min-h-0">
+                            <h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-white shrink-0">Ventas Semanales</h3>
+                            <div class="relative flex-1 w-full min-h-0" id="container-ventas-chart">
                                 <canvas id="ventasChart"></canvas>
+                                <div id="empty-state-ventas" class="hidden h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                                    <div class="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center mb-3">
+                                        <i class="fa-solid fa-chart-line text-2xl"></i>
+                                    </div>
+                                    <h4 class="font-extrabold text-slate-700 dark:text-slate-200 text-sm">Aún no hay ventas registradas</h4>
+                                    <p class="text-xs text-slate-400 mt-1 max-w-xs">Registra tu primera venta para visualizar estadísticas y evolución semanal.</p>
+                                    <button type="button" onclick="switchTab('ventas')" class="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all">
+                                        <i class="fa-solid fa-cash-register"></i> Ir al Punto de Venta
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="glass-panel rounded-3xl p-6 flex flex-col h-[350px]">
-                            <h3 class="text-xl font-bold mb-4 text-slate-800 shrink-0">Top Productos</h3>
-                            <div class="relative flex-1 w-full min-h-0 pb-2">
+                            <h3 class="text-xl font-bold mb-4 text-slate-800 dark:text-white shrink-0">Top Productos</h3>
+                            <div class="relative flex-1 w-full min-h-0 pb-2" id="container-top-chart">
                                 <canvas id="topProductosChart"></canvas>
+                                <div id="empty-state-top" class="hidden h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                                    <div class="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center mb-3">
+                                        <i class="fa-solid fa-trophy text-2xl"></i>
+                                    </div>
+                                    <h4 class="font-extrabold text-slate-700 dark:text-slate-200 text-sm">Aún no hay ventas hoy</h4>
+                                    <p class="text-xs text-slate-400 mt-1 max-w-xs">Los productos con mayor demanda se graficarán aquí automáticamente.</p>
+                                    <button type="button" onclick="switchTab('ventas')" class="mt-4 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all">
+                                        <i class="fa-solid fa-cash-register"></i> Vender Ahora
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1355,8 +1444,8 @@
                                 <p class="text-[10px] font-bold uppercase text-slate-400 mt-2">Caja Física / Zelle</p>
                                 <div class="flex justify-between items-center"><span>Efectivo ($):</span><span class="font-bold text-emerald-600" id="caja-efectivo-usd">$0.00</span></div>
                                 <div class="flex justify-between items-center"><span>Zelle ($):</span><span class="font-bold text-indigo-600" id="caja-zelle">$0.00</span></div>
-                                <div class="flex justify-between items-center"><span>Efectivo (Bs):</span><div class="text-right"><span class="font-bold text-teal-600" id="caja-efectivo-bs">Bs 0.00</span><p class="text-[10px] text-slate-400" id="caja-efectivo-bs-usd">$0.00</p></div></div>
-                                <div class="flex justify-between items-center"><span>Punto (Bs):</span><div class="text-right"><span class="font-bold text-teal-600" id="caja-punto">Bs 0.00</span><p class="text-[10px] text-slate-400" id="caja-punto-usd">$0.00</p></div></div>
+                                <div class="flex justify-between items-center"><span>Efectivo (Bs):</span><div class="text-right"><span class="font-bold text-teal-600" id="caja-efectivo-bs">Bs 0,00</span><p class="text-[10px] text-slate-400" id="caja-efectivo-bs-usd">$0.00</p></div></div>
+                                <div class="flex justify-between items-center"><span>Punto (Bs):</span><div class="text-right"><span class="font-bold text-teal-600" id="caja-punto">Bs 0,00</span><p class="text-[10px] text-slate-400" id="caja-punto-usd">$0.00</p></div></div>
                                 <p class="text-[10px] font-bold uppercase text-slate-400 mt-4 border-t pt-3">Transferencias y Pago Móvil</p>
                                 <div id="saldos-bancarios-container" class="space-y-2"></div>
                             </div>
@@ -1432,7 +1521,7 @@
                                     <i class="fa-solid fa-sack-dollar text-emerald-500 text-sm"></i>
                                 </div>
                                 <h3 class="text-2xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight" id="kpi-global-ventas-usd">$0.00</h3>
-                                <p class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5" id="kpi-global-ventas-bs">Bs 0.00</p>
+                                <p class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5" id="kpi-global-ventas-bs">Bs 0,00</p>
                             </div>
 
                             <!-- Ganancia neta -->
@@ -1617,7 +1706,7 @@
                 </div>
                 <div class="text-right">
                     <p class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Tasa BCV</p>
-                    <p class="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5" id="pay-total-bs">Bs 0.00</p>
+                    <p class="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5" id="pay-total-bs">Bs 0,00</p>
                 </div>
             </div>
 
@@ -1978,7 +2067,7 @@
                     <div class="flex items-center justify-center gap-2 mt-0.5">
                         <span class="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums" id="peso-modal-total-usd">$0.00</span>
                         <span class="text-xs font-bold text-slate-400 dark:text-slate-500">·</span>
-                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300 tabular-nums" id="peso-modal-total-bs">Bs 0.00</span>
+                        <span class="text-xs font-bold text-slate-600 dark:text-slate-300 tabular-nums" id="peso-modal-total-bs">Bs 0,00</span>
                     </div>
                 </div>
             </div>
@@ -2311,7 +2400,7 @@
                 <div class="bg-amber-50 p-3 rounded-xl border border-amber-200/60">
                     <p class="text-[10px] font-bold text-amber-600 uppercase">Total Egresos (Turno Activo)</p>
                     <h4 class="text-xl font-black text-amber-900" id="caja-chica-total-usd">$0.00</h4>
-                    <p class="text-xs text-amber-700 font-medium" id="caja-chica-total-bs">Bs 0.00</p>
+                    <p class="text-xs text-amber-700 font-medium" id="caja-chica-total-bs">Bs 0,00</p>
                 </div>
                 <div class="flex items-center">
                     <button onclick="closeCajaChicaModal(); openGastoModal();" class="w-full h-full bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm shadow-md flex items-center justify-center gap-2 py-3 transition-colors"><i class="fa-solid fa-plus"></i> Nueva Salida de Caja</button>
@@ -2637,22 +2726,22 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 my-4 shrink-0">
                 <div class="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl">
                     <p class="text-[10px] font-bold text-slate-500 uppercase">Total Facturado</p>
-                    <h4 class="text-lg font-black text-slate-800" id="libro-total-ventas">Bs 0.00</h4>
+                    <h4 class="text-lg font-black text-slate-800" id="libro-total-ventas">Bs 0,00</h4>
                     <p class="text-[10px] text-slate-400" id="libro-total-usd">$0.00 USD</p>
                 </div>
                 <div class="bg-emerald-50 border border-emerald-200/80 p-3 rounded-2xl">
                     <p class="text-[10px] font-bold text-emerald-600 uppercase">Ventas Exentas / Exoneradas</p>
-                    <h4 class="text-lg font-black text-emerald-800" id="libro-total-exento">Bs 0.00</h4>
+                    <h4 class="text-lg font-black text-emerald-800" id="libro-total-exento">Bs 0,00</h4>
                     <p class="text-[10px] text-emerald-600">Alimentos sin IVA</p>
                 </div>
                 <div class="bg-blue-50 border border-blue-200/80 p-3 rounded-2xl">
                     <p class="text-[10px] font-bold text-blue-600 uppercase">Base Imponible (16%)</p>
-                    <h4 class="text-lg font-black text-blue-800" id="libro-total-base">Bs 0.00</h4>
+                    <h4 class="text-lg font-black text-blue-800" id="libro-total-base">Bs 0,00</h4>
                     <p class="text-[10px] text-blue-600">Sujeto a impuesto</p>
                 </div>
                 <div class="bg-indigo-50 border border-indigo-200/80 p-3 rounded-2xl">
                     <p class="text-[10px] font-bold text-indigo-600 uppercase">Débito Fiscal (IVA 16%)</p>
-                    <h4 class="text-lg font-black text-indigo-800" id="libro-total-iva">Bs 0.00</h4>
+                    <h4 class="text-lg font-black text-indigo-800" id="libro-total-iva">Bs 0,00</h4>
                     <p class="text-[10px] text-indigo-600">Impuesto a pagar</p>
                 </div>
             </div>
@@ -2846,7 +2935,7 @@
                     </div>
                     <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
                         <span class="text-slate-500 font-bold">🇻🇪 Tasa BCV:</span>
-                        <span class="font-black text-emerald-600 dark:text-emerald-400" id="offline-cached-rate-bcv">Bs 0.00</span>
+                        <span class="font-black text-emerald-600 dark:text-emerald-400" id="offline-cached-rate-bcv">Bs 0,00</span>
                     </div>
                     <div class="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
                         <span class="text-slate-500 font-bold">🧾 Factura Nº:</span>
@@ -2901,7 +2990,7 @@
                 <div class="text-right shrink-0">
                     <span class="text-[10px] uppercase font-bold text-slate-400 block">Deuda Total:</span>
                     <span class="font-black text-rose-600 dark:text-rose-400 text-lg tabular-nums" id="cobro-ws-deuda-usd">$0.00</span>
-                    <span class="text-[10px] font-bold text-slate-500 block tabular-nums" id="cobro-ws-deuda-bs">Bs 0.00</span>
+                    <span class="text-[10px] font-bold text-slate-500 block tabular-nums" id="cobro-ws-deuda-bs">Bs 0,00</span>
                 </div>
             </div>
 
@@ -3010,21 +3099,21 @@
                             <div class="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
                                 <span class="text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1.5"><i class="fa-solid fa-money-bill-1-wave text-teal-500 text-[10px]"></i> Efectivo Bs en Gaveta:</span>
                                 <div class="text-right">
-                                    <span class="font-black text-teal-600 dark:text-teal-400 text-sm tabular-nums" id="arq-esp-bs">Bs 0.00</span>
+                                    <span class="font-black text-teal-600 dark:text-teal-400 text-sm tabular-nums" id="arq-esp-bs">Bs 0,00</span>
                                     <p class="text-[10px] text-slate-400 tabular-nums" id="arq-esp-bs-usd">($0.00)</p>
                                 </div>
                             </div>
                             <div class="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
                                 <span class="text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1.5"><i class="fa-solid fa-credit-card text-indigo-500 text-[10px]"></i> Punto de Venta (Tarjetas):</span>
                                 <div class="text-right">
-                                    <span class="font-black text-indigo-600 dark:text-indigo-400 text-sm tabular-nums" id="arq-esp-punto">Bs 0.00</span>
+                                    <span class="font-black text-indigo-600 dark:text-indigo-400 text-sm tabular-nums" id="arq-esp-punto">Bs 0,00</span>
                                     <p class="text-[10px] text-slate-400 tabular-nums" id="arq-esp-punto-usd">($0.00)</p>
                                 </div>
                             </div>
                             <div class="flex justify-between items-center p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
                                 <span class="text-slate-600 dark:text-slate-400 font-bold flex items-center gap-1.5"><i class="fa-solid fa-mobile-screen-button text-sky-500 text-[10px]"></i> Pago Móvil (Bancos):</span>
                                 <div class="text-right">
-                                    <span class="font-black text-sky-600 dark:text-sky-400 text-sm tabular-nums" id="arq-esp-pm">Bs 0.00</span>
+                                    <span class="font-black text-sky-600 dark:text-sky-400 text-sm tabular-nums" id="arq-esp-pm">Bs 0,00</span>
                                     <p class="text-[10px] text-slate-400 tabular-nums" id="arq-esp-pm-usd">($0.00)</p>
                                 </div>
                             </div>
@@ -3112,7 +3201,7 @@
                         </div>
                         <div>
                             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Diferencia Bs</span>
-                            <span class="text-xs font-black text-slate-600 dark:text-slate-300 tabular-nums" id="arq-dif-total-bs">Bs 0.00</span>
+                            <span class="text-xs font-black text-slate-600 dark:text-slate-300 tabular-nums" id="arq-dif-total-bs">Bs 0,00</span>
                         </div>
                     </div>
                 </div>
@@ -3543,7 +3632,7 @@
          indexa por URL completa, así que una URL con query nueva es un fallo de
          caché y va a la red. Sin esto, un sw.js viejo sigue sirviendo el app.js
          viejo indefinidamente. Súbelo junto con CACHE_NAME en sw.js. -->
-    <script src="app.js?v=28"></script>
+    <script src="app.js?v=29"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
