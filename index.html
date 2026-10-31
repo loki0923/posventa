@@ -50,6 +50,23 @@
             --apple-ease: cubic-bezier(0.16, 1, 0.3, 1);
         }
 
+        /* Densidad y escala compacta para laptops, pantallas POS y monitores con escala Windows */
+        @media (max-width: 1366px), (max-height: 850px) {
+            html {
+                font-size: 14.5px;
+            }
+        }
+        @media (max-width: 1024px), (max-height: 720px) {
+            html {
+                font-size: 13.5px;
+            }
+        }
+        @media (max-height: 600px) {
+            html {
+                font-size: 12.5px;
+            }
+        }
+
         body {
             background-color: #f8fafc;
             background-image:
@@ -1423,86 +1440,87 @@
 
 
     <!-- MODAL PAGOS -->
-    <div id="payment-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[60] hidden opacity-0 transition-all duration-300">
-        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-[2.2rem] p-7 md:p-8 w-full max-w-lg mx-4 transform scale-95 transition-all duration-300 shadow-2xl border border-slate-100 dark:border-slate-800" id="payment-modal-content">
-            <div class="flex justify-between items-center mb-5 pb-2">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-primary-600 to-indigo-600 text-white flex items-center justify-center text-base shadow-sm"><i class="fa-solid fa-credit-card"></i></div>
+    <div id="payment-modal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md flex items-center justify-center z-[60] hidden opacity-0 transition-all duration-300 p-2 sm:p-4">
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl p-5 md:p-6 w-full max-w-lg mx-auto transform scale-95 transition-all duration-300 shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[94vh] flex flex-col" id="payment-modal-content">
+            <div class="flex justify-between items-center mb-3 pb-1.5 shrink-0">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-primary-600 to-indigo-600 text-white flex items-center justify-center text-sm shadow-sm"><i class="fa-solid fa-credit-card"></i></div>
                     <div>
-                        <h3 class="text-xl font-black text-slate-900 dark:text-white">Terminal de Cobro</h3>
-                        <p class="text-[11px] text-slate-400 dark:text-slate-500 font-bold">Gestión bimonetaria USD / Bs</p>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white leading-tight">Terminal de Cobro</h3>
+                        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold">Gestión bimonetaria USD / Bs</p>
                     </div>
                 </div>
-                <button onclick="closePaymentModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-300 flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark text-xs"></i></button>
+                <button onclick="closePaymentModal()" class="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 dark:text-slate-300 flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark text-xs"></i></button>
             </div>
 
             <!-- Total Banner -->
-            <div class="bg-gradient-to-br from-primary-50 via-indigo-50/60 to-purple-50/40 dark:from-primary-950/50 dark:via-indigo-950/30 dark:to-purple-950/20 border border-primary-100 dark:border-primary-900/50 p-5 rounded-2xl mb-5 flex justify-between items-center shadow-xs">
+            <div class="bg-gradient-to-br from-primary-50 via-indigo-50/60 to-purple-50/40 dark:from-primary-950/50 dark:via-indigo-950/30 dark:to-purple-950/20 border border-primary-100 dark:border-primary-900/50 p-3 sm:p-4 rounded-2xl mb-3 flex justify-between items-center shadow-xs shrink-0">
                 <div>
-                    <p class="text-[11px] uppercase font-black text-primary-600 dark:text-primary-400 tracking-wider">Total a Cobrar</p>
-                    <p class="text-3xl md:text-4xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight mt-0.5" id="pay-total-usd">$0.00</p>
+                    <p class="text-[10px] uppercase font-black text-primary-600 dark:text-primary-400 tracking-wider">Total a Cobrar</p>
+                    <p class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums tracking-tight mt-0.5" id="pay-total-usd">$0.00</p>
                 </div>
                 <div class="text-right">
-                    <p class="text-[11px] uppercase font-bold text-slate-400 dark:text-slate-500">Tasa BCV</p>
-                    <p class="text-lg md:text-xl font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5" id="pay-total-bs">Bs 0.00</p>
+                    <p class="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Tasa BCV</p>
+                    <p class="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5" id="pay-total-bs">Bs 0.00</p>
                 </div>
             </div>
 
             <!-- Atajos de Pago Rápido (1 Toque) -->
-            <div class="mb-4">
-                <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1.5 ml-1 flex items-center gap-1">
+            <div class="mb-3 shrink-0">
+                <p class="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1 ml-1 flex items-center gap-1">
                     <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> Atajos de Pago Exacto (1 Toque)
                 </p>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs font-bold">
-                    <button type="button" onclick="quickExactPayment('usd')" class="px-2.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-xs">
+                    <button type="button" onclick="quickExactPayment('usd')" class="px-2 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-2xs">
                         <i class="fa-solid fa-dollar-sign text-[10px]"></i> Todo en $
                     </button>
-                    <button type="button" onclick="quickExactPayment('pago-movil')" class="px-2.5 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-xs">
+                    <button type="button" onclick="quickExactPayment('pago-movil')" class="px-2 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/60 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-2xs">
                         <i class="fa-solid fa-mobile-screen text-[10px]"></i> Pago Móvil
                     </button>
-                    <button type="button" onclick="quickExactPayment('punto')" class="px-2.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-xs">
+                    <button type="button" onclick="quickExactPayment('punto')" class="px-2 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-2xs">
                         <i class="fa-solid fa-credit-card text-[10px]"></i> Punto Bs
                     </button>
-                    <button type="button" onclick="quickExactPayment('efectivo-bs')" class="px-2.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-xs">
+                    <button type="button" onclick="quickExactPayment('efectivo-bs')" class="px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 transition-all flex items-center justify-center gap-1 active:scale-95 shadow-2xs">
                         <i class="fa-solid fa-money-bill-1-wave text-[10px]"></i> Efectivo Bs
                     </button>
                 </div>
             </div>
 
-            <div class="space-y-3.5 mb-5 max-h-[46vh] overflow-y-auto pr-1">
+            <!-- Inputs & Selectors Scrollables -->
+            <div class="space-y-3 mb-3 overflow-y-auto pr-1 flex-1 custom-scrollbar">
                 <!-- Cliente Selector -->
                 <div>
-                    <div class="flex justify-between items-center mb-1.5 ml-1">
+                    <div class="flex justify-between items-center mb-1 ml-1">
                         <div class="flex items-center gap-2">
-                            <label class="block text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Cliente / Cuenta Corriente</label>
+                            <label class="block text-[10px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Cliente / Cuenta Corriente</label>
                             <button type="button" onclick="crearClienteRapidoDesdeCobro()" class="text-[10px] font-black text-primary-600 hover:text-primary-500 dark:text-primary-400 flex items-center gap-0.5 active:scale-95 transition-all"><i class="fa-solid fa-plus-circle"></i> Nuevo</button>
                         </div>
                         <span id="cliente-puntos-badge" class="text-[10px] font-black text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800/50 hidden"></span>
                     </div>
-                    <select id="pay-cliente" class="w-full px-3.5 py-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl outline-none font-bold text-xs text-slate-800 dark:text-slate-100 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" onchange="onClienteSelectChange()">
+                    <select id="pay-cliente" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl outline-none font-bold text-xs text-slate-800 dark:text-slate-100 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all" onchange="onClienteSelectChange()">
                         <option value="">Cliente Ocasional (Venta Contado)</option>
                     </select>
                     <!-- Saldo a Favor Banner -->
-                    <div id="cliente-saldo-favor-banner" class="mt-2.5 p-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 border-2 border-emerald-500/40 hidden flex items-center justify-between gap-2 shadow-xs transition-all">
-                        <div class="flex items-center gap-2.5">
-                            <div class="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-xs shadow-xs shrink-0"><i class="fa-solid fa-gift"></i></div>
+                    <div id="cliente-saldo-favor-banner" class="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-emerald-950/40 border-2 border-emerald-500/40 hidden flex items-center justify-between gap-2 shadow-xs transition-all">
+                        <div class="flex items-center gap-2">
+                            <div class="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xs shadow-xs shrink-0"><i class="fa-solid fa-gift"></i></div>
                             <div>
-                                <p class="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400">Saldo a Favor Disponible</p>
+                                <p class="text-[9px] font-black uppercase text-emerald-700 dark:text-emerald-400">Saldo a Favor Disponible</p>
                                 <p class="text-xs font-black text-slate-800 dark:text-white" id="cliente-saldo-favor-text">$0.00</p>
                             </div>
                         </div>
-                        <button type="button" id="btn-aplicar-saldo-favor" onclick="toggleAplicarSaldoFavor()" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1 active:scale-95 shrink-0">
-                            <i class="fa-solid fa-bolt"></i> Usar Saldo
+                        <button type="button" id="btn-aplicar-saldo-favor" onclick="toggleAplicarSaldoFavor()" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black shadow-xs transition-all flex items-center gap-1 active:scale-95 shrink-0">
+                            <i class="fa-solid fa-bolt text-[10px]"></i> Usar Saldo
                         </button>
                     </div>
                     <div id="canjear-puntos-container" class="mt-2 hidden">
-                        <button type="button" onclick="canjearPuntos()" class="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-98"><i class="fa-solid fa-gift"></i> Canjear Puntos de Descuento</button>
+                        <button type="button" onclick="canjearPuntos()" class="w-full py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black shadow-xs transition-all flex items-center justify-center gap-1.5 active:scale-98"><i class="fa-solid fa-gift"></i> Canjear Puntos de Descuento</button>
                     </div>
                 </div>
 
                 <!-- Divisas Section -->
                 <div>
-                    <div class="flex justify-between items-center mb-1.5 ml-1">
+                    <div class="flex justify-between items-center mb-1 ml-1">
                         <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1"><i class="fa-solid fa-dollar-sign text-emerald-500"></i> Cobro en Divisas ($)</p>
                         <div class="flex items-center gap-1">
                             <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider hidden sm:inline">Billetes:</span>
@@ -1514,55 +1532,57 @@
                             <button type="button" onclick="setExactUsdBill(100)" class="px-1.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black shadow-2xs active:scale-95">$100</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2.5">
+                    <div class="grid grid-cols-2 gap-2">
                         <div class="relative">
                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">💵 $</span>
-                            <input type="number" id="pay-efectivo-usd" placeholder="Efectivo" step="0.01" class="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-emerald-100 dark:border-emerald-950 focus:border-emerald-500 rounded-xl outline-none font-black text-sm text-slate-800 dark:text-white tabular-nums transition-all" oninput="calculateChange()">
+                            <input type="number" id="pay-efectivo-usd" placeholder="Efectivo" step="0.01" class="w-full pl-8 pr-2.5 py-2 bg-slate-50 dark:bg-slate-800/70 border-2 border-emerald-100 dark:border-emerald-950 focus:border-emerald-500 rounded-xl outline-none font-black text-sm text-slate-800 dark:text-white tabular-nums transition-all" oninput="calculateChange()">
                         </div>
                         <div class="relative">
                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">⚡ Z</span>
-                            <input type="number" id="pay-zelle-usd" placeholder="Zelle" step="0.01" class="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-indigo-100 dark:border-indigo-950 focus:border-indigo-500 rounded-xl outline-none font-black text-sm text-slate-800 dark:text-white tabular-nums transition-all" oninput="calculateChange()">
+                            <input type="number" id="pay-zelle-usd" placeholder="Zelle" step="0.01" class="w-full pl-8 pr-2.5 py-2 bg-slate-50 dark:bg-slate-800/70 border-2 border-indigo-100 dark:border-indigo-950 focus:border-indigo-500 rounded-xl outline-none font-black text-sm text-slate-800 dark:text-white tabular-nums transition-all" oninput="calculateChange()">
                         </div>
                     </div>
                 </div>
 
                 <!-- Bolívares Section -->
                 <div>
-                    <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5 ml-1 flex items-center gap-1"><i class="fa-solid fa-coins text-teal-500"></i> Cobro en Bolívares (Bs)</p>
+                    <p class="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1 ml-1 flex items-center gap-1"><i class="fa-solid fa-coins text-teal-500"></i> Cobro en Bolívares (Bs)</p>
                     <div class="grid grid-cols-3 gap-2">
-                        <input type="number" id="pay-efectivo-bs" placeholder="Efectivo Bs" step="0.1" class="w-full p-2.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-teal-100 dark:border-teal-950 focus:border-teal-500 rounded-xl outline-none font-black text-xs text-slate-800 dark:text-white tabular-nums transition-all text-center" oninput="calculateChange()">
-                        <input type="number" id="pay-punto-bs" placeholder="Punto Bs" step="0.1" class="w-full p-2.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-teal-100 dark:border-teal-950 focus:border-teal-500 rounded-xl outline-none font-black text-xs text-slate-800 dark:text-white tabular-nums transition-all text-center" oninput="calculateChange()">
-                        <input type="number" id="pay-pago-movil-bs" placeholder="P. Móvil Bs" step="0.1" class="w-full p-2.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-teal-100 dark:border-teal-950 focus:border-teal-500 rounded-xl outline-none font-black text-xs text-slate-800 dark:text-white tabular-nums transition-all text-center" oninput="calculateChange()">
+                        <input type="number" id="pay-efectivo-bs" placeholder="Efectivo Bs" step="0.1" class="w-full py-2 px-1.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-teal-100 dark:border-teal-950 focus:border-teal-500 rounded-xl outline-none font-black text-xs text-slate-800 dark:text-white tabular-nums transition-all text-center" oninput="calculateChange()">
+                        <input type="number" id="pay-punto-bs" placeholder="Punto Bs" step="0.1" class="w-full py-2 px-1.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-teal-100 dark:border-teal-950 focus:border-teal-500 rounded-xl outline-none font-black text-xs text-slate-800 dark:text-white tabular-nums transition-all text-center" oninput="calculateChange()">
+                        <input type="number" id="pay-pago-movil-bs" placeholder="P. Móvil Bs" step="0.1" class="w-full py-2 px-1.5 bg-slate-50 dark:bg-slate-800/70 border-2 border-teal-100 dark:border-teal-950 focus:border-teal-500 rounded-xl outline-none font-black text-xs text-slate-800 dark:text-white tabular-nums transition-all text-center" oninput="calculateChange()">
                     </div>
                 </div>
 
                 <!-- Banco Selector -->
                 <div id="bank-selection-container" class="hidden">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase ml-1 mb-1">Cuenta Bancaria Receptora</label>
-                    <select id="pay-banco-pm" class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl outline-none font-bold text-xs text-slate-800 dark:text-slate-100">
+                    <select id="pay-banco-pm" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 rounded-xl outline-none font-bold text-xs text-slate-800 dark:text-slate-100">
                         <option value="">Seleccione Cuenta Destino...</option>
                     </select>
                 </div>
+
+                <!-- Status Box -->
+                <div id="pay-status-box" class="p-2.5 rounded-xl text-center font-extrabold text-xs sm:text-sm bg-slate-100/70 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 text-slate-500 dark:text-slate-400 tabular-nums transition-all">Ingrese los montos...</div>
+
+                <!-- Receipt & WhatsApp Checkboxes -->
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-200/60 dark:border-slate-700/50 cursor-pointer">
+                        <input type="checkbox" id="pay-print-ticket" checked class="w-3.5 h-3.5 rounded text-primary-600 focus:ring-0">
+                        <span class="font-bold text-[10px] sm:text-[11px] text-slate-700 dark:text-slate-300">Imprimir Ticket</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-emerald-50/60 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-200/50 dark:border-emerald-800/40 cursor-pointer">
+                        <input type="checkbox" id="pay-send-whatsapp" class="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-0">
+                        <span class="font-bold text-[10px] sm:text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1"><i class="fa-brands fa-whatsapp text-emerald-500"></i> WhatsApp</span>
+                    </label>
+                </div>
             </div>
 
-            <!-- Status Box -->
-            <div id="pay-status-box" class="p-3.5 rounded-2xl mb-4 text-center font-extrabold text-sm bg-slate-100/70 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 text-slate-500 dark:text-slate-400 tabular-nums transition-all">Ingrese los montos...</div>
-
-            <!-- Receipt & WhatsApp Checkboxes -->
-            <div class="grid grid-cols-2 gap-2.5 mb-4">
-                <label class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-700/50 cursor-pointer">
-                    <input type="checkbox" id="pay-print-ticket" checked class="w-4 h-4 rounded text-primary-600 focus:ring-0">
-                    <span class="font-bold text-[11px] text-slate-700 dark:text-slate-300">Imprimir Ticket</span>
-                </label>
-                <label class="flex items-center gap-2 bg-emerald-50/60 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200/50 dark:border-emerald-800/40 cursor-pointer">
-                    <input type="checkbox" id="pay-send-whatsapp" class="w-4 h-4 rounded text-emerald-600 focus:ring-0">
-                    <span class="font-bold text-[11px] text-emerald-700 dark:text-emerald-400 flex items-center gap-1"><i class="fa-brands fa-whatsapp text-emerald-500"></i> WhatsApp</span>
-                </label>
+            <!-- Actions (Siempre visibles al pie) -->
+            <div class="shrink-0 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                <button id="btn-confirm-sale" onclick="confirmSale()" disabled class="w-full bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 font-black py-3 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-sm"><i class="fa-solid fa-lock"></i> Procesar</button>
+                <button onclick="closePaymentModal()" class="w-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-bold py-1.5 mt-1 text-xs transition-colors">Cancelar y Volver</button>
             </div>
-
-            <!-- Actions -->
-            <button id="btn-confirm-sale" onclick="confirmSale()" disabled class="w-full bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 font-black py-4 rounded-2xl text-base transition-all flex items-center justify-center gap-2"><i class="fa-solid fa-lock"></i> Procesar</button>
-            <button onclick="closePaymentModal()" class="w-full text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-bold py-2 mt-2 text-xs transition-colors">Cancelar y Volver</button>
         </div>
     </div>
 
@@ -2074,7 +2094,7 @@
 
     <!-- MODAL GASTOS / CAJA CHICA -->
     <div id="gasto-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] hidden opacity-0 transition-opacity">
-        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-[2.2rem] p-8 w-full max-w-sm mx-4 transform scale-95 transition-transform border border-slate-100 dark:border-slate-800 shadow-2xl" id="gasto-modal-content">
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-[2.2rem] p-6 w-full max-w-sm mx-4 transform scale-95 transition-transform max-h-[92vh] overflow-y-auto border border-slate-100 dark:border-slate-800 shadow-2xl rounded-3xl" id="gasto-modal-content">
             <h3 class="text-2xl font-black text-slate-800 dark:text-white mb-6 flex items-center gap-2"><i class="fa-solid fa-money-bill-transfer text-amber-500"></i> Salida de Caja Chica</h3>
             <div class="space-y-4">
                 <div>
@@ -2700,7 +2720,7 @@
 
     <!-- MODAL COBRO WHATSAPP EN 1 TOQUE -->
     <div id="cobro-whatsapp-modal" class="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center z-[70] hidden opacity-0 transition-all duration-300">
-        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-[2.2rem] p-6 md:p-8 w-full max-w-lg mx-4 transform scale-95 transition-all duration-300 shadow-2xl border border-slate-100 dark:border-slate-800" id="cobro-whatsapp-modal-content">
+        <div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-[2.2rem] p-5 md:p-6 w-full max-w-lg mx-4 transform scale-95 transition-all duration-300 shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[92vh] overflow-y-auto rounded-3xl" id="cobro-whatsapp-modal-content">
             <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div class="flex items-center gap-2.5">
                     <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl shadow-xs">
@@ -3367,7 +3387,7 @@
          indexa por URL completa, así que una URL con query nueva es un fallo de
          caché y va a la red. Sin esto, un sw.js viejo sigue sirviendo el app.js
          viejo indefinidamente. Súbelo junto con CACHE_NAME en sw.js. -->
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
