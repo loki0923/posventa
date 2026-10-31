@@ -560,7 +560,7 @@
                         <span id="badge-pedidos-online" class="hidden min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-bounce shadow-xs">0</span>
                     </button>
 
-                    <button onclick="cerrarSesion()" title="Cerrar Sesión" class="flex items-center gap-1.5 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white px-3.5 py-1.5 rounded-full text-xs font-bold shadow-xs transition-all transform active:scale-95">
+                    <button onclick="cerrarSesion()" title="Cerrar Sesión del Turno" class="flex items-center gap-1.5 bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-full text-xs font-bold shadow-2xs transition-all active:scale-95">
                         <i class="fa-solid fa-right-from-bracket text-[11px]"></i>
                         <span class="hidden sm:inline">Salir</span>
                     </button>
@@ -651,8 +651,8 @@
                                     </div>
                                 </div>
                                 <button type="button" onclick="openVentaRapidaModal()" class="animated-btn h-12 px-4 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white rounded-2xl shadow-md shadow-amber-500/20 flex items-center gap-2 font-black shrink-0 text-xs tracking-wide active:scale-95" title="Cobrar monto libre sin registrar producto">
-                                    <i class="fa-solid fa-bolt-lightning text-sm"></i>
-                                    <span class="hidden sm:inline">Venta Rápida</span>
+                                    <i class="fa-solid fa-calculator text-sm"></i>
+                                    <span class="hidden sm:inline">Monto Libre</span>
                                 </button>
                                 <button type="button" onclick="openCameraScanner()" class="animated-btn h-12 px-4 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-500 hover:to-indigo-500 text-white rounded-2xl shadow-md shadow-primary-500/20 flex items-center gap-2 font-bold shrink-0 text-xs tracking-wide active:scale-95" title="Escanear con cámara del dispositivo">
                                     <i class="fa-solid fa-camera text-sm"></i>
@@ -663,7 +663,7 @@
                             <!-- Category Filter Chips & Hotkeys Cheat-Sheet -->
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                                 <div class="flex items-center gap-1.5 overflow-x-auto py-1 max-w-full custom-scrollbar flex-1" id="pos-category-chips"></div>
-                                <div class="hidden xl:flex items-center gap-1.5 text-[10px] font-extrabold text-slate-400 dark:text-slate-500 shrink-0">
+                                <div class="flex items-center gap-1.5 text-[11px] font-black text-slate-600 dark:text-slate-300 shrink-0 overflow-x-auto py-0.5">
                                     <span class="bg-white/80 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs"><kbd class="text-primary-500 font-black">F2</kbd> Buscar</span>
                                     <span class="bg-white/80 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs"><kbd class="text-emerald-500 font-black">F4</kbd> Cobrar</span>
                                     <span class="bg-white/80 dark:bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs"><kbd class="text-amber-500 font-black">F8</kbd> Espera</span>
@@ -724,7 +724,7 @@
                                     </div>
                                 </div>
                                 <button onclick="openPaymentModal()" class="w-full animated-btn bg-gradient-to-r from-primary-600 via-indigo-600 to-purple-600 hover:from-primary-500 hover:to-purple-500 text-white font-black py-3.5 rounded-xl shadow-lg shadow-primary-500/25 flex items-center justify-center gap-2 text-base mb-2">
-                                    <i class="fa-solid fa-credit-card"></i> Procesar Cobro
+                                    <i class="fa-solid fa-credit-card"></i> Procesar Cobro <span class="bg-white/20 text-white text-xs px-2 py-0.5 rounded-md font-mono font-black ml-1.5 shadow-2xs">F4</span>
                                 </button>
                                 <button onclick="clearCart()" class="w-full py-2 rounded-xl text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/30 transition-all font-bold text-xs">
                                     <i class="fa-solid fa-trash-can mr-1 text-[10px]"></i> Vaciar Ticket
@@ -2237,6 +2237,13 @@
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase ml-1 mb-1">RIF / Cédula</label>
                     <input type="text" id="settings-rif" placeholder="Ej. J-12345678-9" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase ml-1 mb-1">Ancho de Impresora Térmica (Tickets)</label>
+                    <select id="settings-ticket-width" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs text-slate-800">
+                        <option value="80mm">80 mm (Estándar de Mostrador / EPSON / Xprinter)</option>
+                        <option value="58mm">58 mm (Compacta / Portátil Bluetooth / Mini POS)</option>
+                    </select>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase ml-1 mb-1">WhatsApp para Pedidos Online (Catálogo)</label>

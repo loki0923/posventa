@@ -278,6 +278,19 @@ window.formatBs = formatBs;
 window.formatUSD = formatUSD;
 window.formatBsFromUSD = formatBsFromUSD;
 
+// Formato ergonómico de cantidades: enteros para unidades (und), decimales (hasta 3) para peso/kg
+function formatQty(qty, tipo) {
+    const num = parseFloat(qty) || 0;
+    const tipoStr = String(tipo || '').toLowerCase().trim();
+    const esPeso = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'peso', 'g', 'gramo', 'gramos'].includes(tipoStr);
+    if (esPeso) {
+        return num.toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+    }
+    return Math.round(num).toString();
+}
+window.formatQty = formatQty;
+
+
 function roundMoney(num) {
     return Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
 }
@@ -1290,7 +1303,7 @@ function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplic
     }
 
     // 8. Limpiar carrito y cerrar modal
-    clearCart();
+    clearCart(true);
     closePaymentModal();
     updateNetworkStatusUI();
     renderPOSProducts();
@@ -2738,7 +2751,8 @@ function procesarCodigoEscaneado(val) {
         (p.categoria || '').toLowerCase().includes(val) ||
         (p.codigo || '').toLowerCase().includes(val)
     );
-    if (filtered.length >= 1) {
+    // Solo auto-agregar si hay exactamente 1 coincidencia; si hay múltiples, dejar que el cajero seleccione
+    if (filtered.length === 1) {
         const f = filtered[0];
         const fTipoLower = String(f.tipo || '').toLowerCase().trim();
         const fIsUnidad = !f.tipo || ['unidad', 'und', 'unid', 'pz', 'pieza'].includes(fTipoLower);
@@ -2859,6 +2873,28 @@ function setupBarcodeScanner() {
             if (exito) {
                 input.value = '';
                 triggerSearch('');
+            } else {
+                // Si no fue código de barras pero el término arrojó exactamente 1 producto visible en el grid:
+                const queryNorm = normalizarTextoBusqueda(val);
+                const filtradosActuales = products.filter(p => {
+                    if (currentPOSCategory !== 'Todos' && p.categoria !== currentPOSCategory) return false;
+                    const idx = _posSearchIndex.get(p.id) || normalizarTextoBusqueda(p.nombre + ' ' + (p.codigo || ''));
+                    return idx.includes(queryNorm);
+                });
+                if (filtradosActuales.length === 1) {
+                    const prodUnico = filtradosActuales[0];
+                    if (prodUnico.stock > 0) {
+                        const tLower = String(prodUnico.tipo || '').toLowerCase().trim();
+                        const isUnd = !prodUnico.tipo || ['unidad', 'und', 'unid', 'pz', 'pieza'].includes(tLower);
+                        if (isUnd || storeConfig.businessType === 'comida_rapida') {
+                            addToCart(prodUnico, 1);
+                        } else {
+                            addToCartPrompt(prodUnico.id);
+                        }
+                        input.value = '';
+                        triggerSearch('');
+                    }
+                }
             }
         }
     });
@@ -2997,7 +3033,7 @@ function renderPOSProductsConFiltro(queryNorm = '', categoriaFiltro = 'Todos') {
                     <div class="text-emerald-600 dark:text-emerald-400 font-black text-xl tabular-nums leading-tight">${formatUSD(precioNum)}</div>
                     <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 tabular-nums">${formatBs(precioBs)}</div>
                 </div>
-                <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-xl tabular-nums shrink-0">${stockNum.toFixed(1)} ${p.tipo}</span>
+                <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-xl tabular-nums shrink-0">${formatQty(stockNum, p.tipo)} ${p.tipo}</span>
             </div>`;
         fragment.appendChild(c);
     });
@@ -3119,7 +3155,7 @@ function setupKeyboardShortcuts() {
         const paymentModal = document.getElementById('payment-modal');
         const isPaymentOpen = paymentModal && !paymentModal.classList.contains('hidden');
 
-        // Escape: cerrar modales abiertos
+        // Escape: cerrar modales abiertos y re-enfocar el buscador del POS
         if (e.key === 'Escape') {
             if (isPaymentOpen) {
                 closePaymentModal();
@@ -3131,16 +3167,22 @@ function setupKeyboardShortcuts() {
                 return;
             }
             const searchPos = document.getElementById('search-pos');
-            if (searchPos && activeEl === searchPos && searchPos.value) {
-                searchPos.value = '';
-                triggerSearch('');
+            if (searchPos) {
+                if (activeEl === searchPos && searchPos.value) {
+                    searchPos.value = '';
+                    triggerSearch('');
+                } else {
+                    searchPos.focus();
+                    searchPos.select();
+                }
                 return;
             }
         }
 
         // Si el Terminal de Cobro está abierto:
         if (isPaymentOpen) {
-            if (e.key === 'Enter') {
+            // F4 o Enter confirma la venta de inmediato si el monto está completo o hay fiado
+            if (e.key === 'F4' || e.key === 'Enter') {
                 const btnConfirm = document.getElementById('btn-confirm-sale');
                 if (btnConfirm && !btnConfirm.disabled) {
                     e.preventDefault();
@@ -3152,13 +3194,13 @@ function setupKeyboardShortcuts() {
                 if (e.key === '1' || e.key === 'F1') {
                     e.preventDefault();
                     quickExactPayment('usd');
-                } else if (e.key === '2' || e.key === 'F2') {
+                } else if (e.key === '2') {
                     e.preventDefault();
                     quickExactPayment('pago-movil');
-                } else if (e.key === '3' || e.key === 'F3') {
+                } else if (e.key === '3') {
                     e.preventDefault();
                     quickExactPayment('punto');
-                } else if (e.key === '4' || e.key === 'F4') {
+                } else if (e.key === '4') {
                     e.preventDefault();
                     quickExactPayment('efectivo-bs');
                 }
@@ -3208,7 +3250,7 @@ async function openVentaRapidaModal() {
     const tasa = getBcvRate();
     
     const { value: formValues } = await Swal.fire({
-        title: '⚡ Venta Rápida / Varios',
+        title: '⚡ Cobro por Monto Libre / Varios',
         html: `
             <div class="space-y-3 text-left">
                 <p class="text-xs text-slate-500 dark:text-slate-400">Ingresa un monto directo para cobrar sin registrar el producto en inventario.</p>
@@ -3782,7 +3824,7 @@ function updateCartUI() {
                                 <i class="fa-solid fa-minus text-[9px]"></i>
                             </button>
                             <div onclick="editCartQty(${idx})" class="px-2 py-0.5 text-center cursor-pointer select-none hover:bg-white/50 dark:hover:bg-slate-600/30 rounded-md transition-colors" title="Clic para escribir cantidad exacta">
-                                <span class="text-xs font-black text-slate-800 dark:text-slate-100 tabular-nums">${i.qty}</span>
+                                <span class="text-xs font-black text-slate-800 dark:text-slate-100 tabular-nums">${formatQty(i.qty, i.tipo)}</span>
                                 <span class="text-[9px] font-bold text-slate-400 dark:text-slate-400 ml-0.5">${i.tipo}</span>
                             </div>
                             <button type="button" onclick="changeCartQty(${idx}, 1)" class="w-6 h-6 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-700 font-bold text-xs flex items-center justify-center shadow-2xs active:scale-90 transition-all" title="Sumar">
@@ -3869,11 +3911,35 @@ async function promptDiscount() {
     }
 }
 
-function clearCart() {
+function clearCart(silent = false) {
+    if (!silent && cart.length > 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '¿Vaciar el ticket actual?',
+                text: 'Se eliminarán todos los productos agregados al ticket.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Sí, vaciar ticket',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    cart = [];
+                    currentDiscount = 0;
+                    puntosCanjeadosVenta = 0;
+                    updateCartUI();
+                    document.getElementById('search-pos')?.focus();
+                }
+            });
+            return;
+        }
+    }
     cart = [];
     currentDiscount = 0;
     puntosCanjeadosVenta = 0;
     updateCartUI();
+    document.getElementById('search-pos')?.focus();
 }
 
 // =====================================================
@@ -4544,7 +4610,7 @@ function calculateChange() {
     if (diff >= -0.01 || clienteId) {
         btn.disabled = false;
         btn.className = "w-full animated-btn bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-600/25 transition-all text-base";
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> Procesar Venta <span class="hidden sm:inline-block ml-2 text-xs font-mono font-bold bg-emerald-700/60 px-2 py-0.5 rounded-lg border border-emerald-400/40">[Enter ↵]</span>';
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Procesar Venta <span class="hidden sm:inline-block ml-2 text-xs font-mono font-black bg-emerald-700/60 px-2 py-0.5 rounded-lg border border-emerald-400/40">[F4 / Enter]</span>';
         if (diff < -0.01 && clienteId) {
             sBox.className = "p-3.5 rounded-2xl mb-4 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 font-extrabold text-xs border border-amber-200 dark:border-amber-800/60";
             sBox.innerHTML = `<i class="fa-solid fa-handshake mr-1 text-amber-600"></i> Venta a Crédito (Fiado): <b>$${Math.abs(diff).toFixed(2)}</b> (Bs ${(Math.abs(diff) * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2 })})`;
@@ -4832,7 +4898,7 @@ async function confirmSale() {
         crearComandaCocina(onlineSaleData, saleRef.id);
     }
 
-    clearCart();
+    clearCart(true);
     closePaymentModal();
 
     if (typeof marcarCajaAbiertaPorVenta === 'function') {
@@ -4913,7 +4979,9 @@ function enviarTicketWhatsApp(s) {
  */
 
 function imprimirTicketAislado(htmlContent, options = {}) {
-    const width = options.width || '78mm';
+    const defaultWidth = (storeConfig && storeConfig.ticketWidth === '58mm') ? '58mm' : '78mm';
+    const width = options.width || defaultWidth;
+    const is58mm = width === '58mm';
     const isLandscape = options.landscape || false;
 
     // Crear o reutilizar un iframe invisible fuera de la pantalla
@@ -4951,8 +5019,8 @@ function imprimirTicketAislado(htmlContent, options = {}) {
                         width: ${width};
                         max-width: ${width};
                         margin: 0 auto;
-                        padding: 4mm 3mm;
-                        font-size: 12px;
+                        padding: ${is58mm ? '2mm 1mm' : '4mm 3mm'};
+                        font-size: ${is58mm ? '11px' : '12px'};
                         line-height: 1.35;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
@@ -5063,7 +5131,7 @@ function generateReceipt(s) {
             ${s.clienteNombre ? `<p style="margin:0; font-size:11px; font-weight:bold;">Cliente: ${s.clienteNombre}</p>` : ''}
         </div>
         <div style="border-bottom:1px dashed #000; padding-bottom:10px; margin-bottom:10px; font-family: 'Courier New', Courier, monospace; color: black;">
-            ${s.items.map(i => `<div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px;"><span style="flex:1; text-align:left;">${i.qty} ${i.tipo} - ${i.nombre}</span><span>${formatUSD(i.qty * i.precio)}</span></div>`).join('')}
+            ${s.items.map(i => `<div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px;"><span style="flex:1; text-align:left;">${formatQty(i.qty, i.tipo)} ${i.tipo} - ${i.nombre}</span><span>${formatUSD(i.qty * i.precio)}</span></div>`).join('')}
         </div>
         ${s.descuentoUsd > 0 ? `
             <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px; font-family: 'Courier New', monospace;"><span>SUBTOTAL:</span><span>${formatUSD(s.totalUsd + s.descuentoUsd)}</span></div>
@@ -5087,7 +5155,8 @@ function generateReceipt(s) {
         </div>
         <div style="text-align:center; margin-top:8px; font-size:12px; font-family: 'Courier New', monospace; font-weight:bold;"><p>¡Gracias por su compra!</p></div>`;
 
-    imprimirTicketAislado(receiptHtml);
+    const is58mmRec = (storeConfig && storeConfig.ticketWidth === '58mm');
+    imprimirTicketAislado(receiptHtml, { width: is58mmRec ? '58mm' : '78mm' });
 }
 
 // =====================================================
@@ -5764,6 +5833,18 @@ function enviarCierreWhatsApp() {
 }
 
 async function confirmarCierreArqueo() {
+    const confirmResult = await Swal.fire({
+        title: '¿Confirmar Cierre de Turno?',
+        text: 'Se asentará el Arqueo Z y se registrará el corte de caja definitivo.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, asentar cierre',
+        cancelButtonText: 'Revisar montos'
+    });
+    if (!confirmResult.isConfirmed) return;
+
     const tasa = getBcvRate();
     const fisUsd = parseFloat(document.getElementById('arq-fis-usd')?.value) || 0;
     const fisBs = parseFloat(document.getElementById('arq-fis-bs')?.value) || 0;
@@ -5974,13 +6055,28 @@ function calcularMerma() {
 
 function guardarMerma() {
     if (!activeMermaCalc) return;
-    const b = db.batch();
-    b.update(getDb('products').doc(activeMermaCalc.idProd), { stock: firebase.firestore.FieldValue.increment(-activeMermaCalc.mermaKg) });
-    b.set(getDb('mermas').doc(), { ...activeMermaCalc, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
-    b.commit().then(() => {
-        document.getElementById('merma-resultado').classList.add('hidden');
-        activeMermaCalc = null;
-        Swal.fire('OK', '', 'success');
+    Swal.fire({
+        title: '¿Confirmar registro de merma?',
+        text: `Se descontarán ${activeMermaCalc.mermaKg.toFixed(3)} Kg de ${activeMermaCalc.nombre} (Pérdida estimada: $${activeMermaCalc.costoPerdida.toFixed(2)}).`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, registrar merma',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const b = db.batch();
+            b.update(getDb('products').doc(activeMermaCalc.idProd), { stock: firebase.firestore.FieldValue.increment(-activeMermaCalc.mermaKg) });
+            b.set(getDb('mermas').doc(), { ...activeMermaCalc, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+            b.commit().then(() => {
+                document.getElementById('merma-resultado').classList.add('hidden');
+                activeMermaCalc = null;
+                Swal.fire('Registrado', 'Merma asentada en el inventario', 'success');
+            }).catch(e => {
+                Swal.fire('Error', 'No se pudo guardar la merma: ' + e.message, 'error');
+            });
+        }
     });
 }
 
@@ -7788,6 +7884,9 @@ function openSettingsModal() {
     if (!isAdmin) return;
     document.getElementById('settings-name').value = storeConfig.name === 'GestiónPro' ? '' : storeConfig.name;
     document.getElementById('settings-rif').value = storeConfig.rif || '';
+    if (document.getElementById('settings-ticket-width')) {
+        document.getElementById('settings-ticket-width').value = storeConfig.ticketWidth || '80mm';
+    }
     if (document.getElementById('settings-phone')) document.getElementById('settings-phone').value = normalizarTelefono(storeConfig.phone);
     if (document.getElementById('settings-nro-factura')) document.getElementById('settings-nro-factura').value = storeConfig.nroFactura || 1001;
     if (document.getElementById('settings-nro-control')) document.getElementById('settings-nro-control').value = storeConfig.nroControl || '00-001001';
@@ -7828,6 +7927,7 @@ function previewLogo(input) {
 async function saveSettings() {
     const name = document.getElementById('settings-name').value.trim();
     const rif = document.getElementById('settings-rif').value.trim();
+    const ticketWidth = document.getElementById('settings-ticket-width')?.value || '80mm';
     const phone = normalizarTelefono(document.getElementById('settings-phone')?.value || '');
     const nroFactura = parseInt(document.getElementById('settings-nro-factura')?.value || 1001);
     const nroControl = document.getElementById('settings-nro-control')?.value.trim() || '00-001001';
@@ -7840,6 +7940,8 @@ async function saveSettings() {
         const payload = { nroFactura, nroControl };
         if (name) payload.storeName = name; else payload.storeName = firebase.firestore.FieldValue.delete();
         if (rif) payload.storeRif = rif; else payload.storeRif = firebase.firestore.FieldValue.delete();
+        payload.ticketWidth = ticketWidth;
+        storeConfig.ticketWidth = ticketWidth;
         if (phone) payload.storePhone = phone; else payload.storePhone = firebase.firestore.FieldValue.delete();
         if (logoData) payload.storeLogo = logoData; else payload.storeLogo = firebase.firestore.FieldValue.delete();
         await getDb('settings').doc('general').set(payload, { merge: true });
