@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v20 · 31/10/2026 · premium native weight modal and dark mode theme';
+const APP_VERSION = 'v1.1.0';
 
 function pintarVersionApp() {
     try {
@@ -111,6 +111,186 @@ function clearActiveListeners() {
 }
 
 // Helper para precisión de redondeo monetario (evita centavos flotantes)
+// =====================================================
+// MOTOR CENTRAL DE MONEDA Y CONVERSIÓN BIMONETARIA
+// =====================================================
+// =====================================================
+// CARGA DINÁMICA BAJO DEMANDA (LAZY LOADING) DE LIBRERÍAS
+// =====================================================
+const _loadedScripts = new Set();
+
+function lazyLoadScript(src) {
+    if (_loadedScripts.has(src) || (typeof document !== 'undefined' && document.querySelector(`script[src="${src}"]`))) {
+        return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => {
+            _loadedScripts.add(src);
+            resolve();
+        };
+        s.onerror = (err) => reject(new Error(`Error al cargar ${src}`));
+        document.head.appendChild(s);
+    });
+}
+
+async function ensureChartJs() {
+    if (typeof Chart !== 'undefined') return;
+    await lazyLoadScript('https://cdn.jsdelivr.net/npm/chart.js');
+}
+
+async function ensureXLSX() {
+    if (typeof XLSX !== 'undefined') return;
+    await lazyLoadScript('https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js');
+}
+
+async function ensureHtml5Qrcode() {
+    if (typeof Html5Qrcode !== 'undefined') return;
+    await lazyLoadScript('https://unpkg.com/html5-qrcode');
+}
+
+// =====================================================
+// ALMACENAMIENTO RESILIENTE INDEXEDDB (COLA OFFLINE)
+// =====================================================
+const IDB_NAME = 'GestionProDB';
+const IDB_VERSION = 1;
+const IDB_STORE_SALES = 'offline_sales';
+
+function openIndexedDB() {
+    return new Promise((resolve) => {
+        if (typeof window === 'undefined' || !('indexedDB' in window)) return resolve(null);
+        try {
+            const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const idb = e.target.result;
+                if (!idb.objectStoreNames.contains(IDB_STORE_SALES)) {
+                    idb.createObjectStore(IDB_STORE_SALES, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+async function guardarVentaOfflineIndexedDB(sale) {
+    try {
+        const idb = await openIndexedDB();
+        if (!idb) return;
+        const tx = idb.transaction(IDB_STORE_SALES, 'readwrite');
+        const store = tx.objectStore(IDB_STORE_SALES);
+        store.put(sale);
+    } catch (e) {
+        console.warn('Fallback a localStorage para venta offline:', e);
+    }
+}
+
+async function eliminarVentaOfflineIndexedDB(saleId) {
+    try {
+        const idb = await openIndexedDB();
+        if (!idb) return;
+        const tx = idb.transaction(IDB_STORE_SALES, 'readwrite');
+        const store = tx.objectStore(IDB_STORE_SALES);
+        store.delete(saleId);
+    } catch (e) {}
+}
+
+async function recuperarVentasOfflineIndexedDB() {
+    try {
+        const idb = await openIndexedDB();
+        if (!idb) return [];
+        return new Promise((resolve) => {
+            const tx = idb.transaction(IDB_STORE_SALES, 'readonly');
+            const store = tx.objectStore(IDB_STORE_SALES);
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+
+// Metadatos de la tasa BCV
+let rateMetadata = {
+    lastUpdated: localStorage.getItem('pos_bcv_rate_updated') || null,
+    isManual: localStorage.getItem('pos_bcv_rate_is_manual') === 'true'
+};
+
+// Obtiene la tasa BCV activa garantizando que nunca sea 0, NaN o indefinida
+function getBcvRate() {
+    if (rates && typeof rates.bcv === 'number' && rates.bcv > 0) {
+        return rates.bcv;
+    }
+    const cached = parseFloat(localStorage.getItem('pos_last_bcv_rate'));
+    if (cached && !isNaN(cached) && cached > 0) {
+        return cached;
+    }
+    return autoRates.bcv || 1;
+}
+
+// FUNCIÓN CENTRAL ÚNICA DE CONVERSIÓN USD -> BS
+// Reemplaza todos los cálculos dispersos en POS, ticket, cobro, fiados, reportes, tienda online e inventario
+function usdToBs(montoUsd, tasaManual = null) {
+    const tasa = (typeof tasaManual === 'number' && tasaManual > 0) ? tasaManual : getBcvRate();
+    return roundMoney(Number(montoUsd || 0) * tasa);
+}
+
+// Helper inverso Bs -> USD
+function bsToUsd(montoBs, tasaManual = null) {
+    const tasa = (typeof tasaManual === 'number' && tasaManual > 0) ? tasaManual : getBcvRate();
+    if (tasa <= 0) return 0;
+    return roundMoney(Number(montoBs || 0) / tasa);
+}
+
+// Helper internacionalizado para formateo con Intl.NumberFormat('es-VE')
+const formatterVE = new Intl.NumberFormat('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+});
+
+// Helper de formato en Bolívares (ej. "Bs 1.289,42")
+function formatBs(montoBs) {
+    const n = Number(montoBs || 0);
+    return `Bs ${formatterVE.format(isNaN(n) ? 0 : n)}`;
+}
+
+// Helper de formato en Dólares según convención (ej. "$1,45")
+function formatUSD(montoUsd) {
+    const n = Number(montoUsd || 0);
+    return `$${formatterVE.format(isNaN(n) ? 0 : n)}`;
+}
+
+// Helper directo: convierte USD a Bs y formatea en "Bs X.XXX,XX"
+function formatBsFromUSD(montoUsd, tasaManual = null) {
+    return formatBs(usdToBs(montoUsd, tasaManual));
+}
+
+window.getBcvRate = getBcvRate;
+window.usdToBs = usdToBs;
+window.bsToUsd = bsToUsd;
+window.formatBs = formatBs;
+window.formatUSD = formatUSD;
+window.formatBsFromUSD = formatBsFromUSD;
+
+// Formato ergonómico de cantidades: enteros para unidades (und), decimales (hasta 3) para peso/kg
+function formatQty(qty, tipo) {
+    const num = parseFloat(qty) || 0;
+    const tipoStr = String(tipo || '').toLowerCase().trim();
+    const esPeso = ['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'peso', 'g', 'gramo', 'gramos'].includes(tipoStr);
+    if (esPeso) {
+        return num.toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+    }
+    return Math.round(num).toString();
+}
+window.formatQty = formatQty;
+
+
 function roundMoney(num) {
     return Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
 }
@@ -407,6 +587,37 @@ function leerSesionLocal(uid) {
 // =====================================================
 // INICIALIZACIÓN Y MOTOR OFFLINE
 // =====================================================
+async function checkDemoMode() {
+    // Si la respuesta tarda más de 2 segundos, mostrar aviso explicativo amigable de cold-start en Render
+    const coldTimer = setTimeout(() => {
+        const banner = document.getElementById('render-coldstart-banner');
+        if (banner) banner.classList.remove('hidden');
+    }, 2000);
+
+    try {
+        const res = await fetch('/api/config');
+        clearTimeout(coldTimer);
+        const banner = document.getElementById('render-coldstart-banner');
+        if (banner) banner.classList.add('hidden');
+
+        if (res.ok) {
+            const cfg = await res.json();
+            if (cfg && cfg.demoMode === true) {
+                const btn = document.getElementById('btn-demo-credentials');
+                if (btn) btn.classList.remove('hidden');
+                return;
+            }
+        }
+    } catch (e) {
+        clearTimeout(coldTimer);
+        const banner = document.getElementById('render-coldstart-banner');
+        if (banner) banner.classList.add('hidden');
+    }
+    const btn = document.getElementById('btn-demo-credentials');
+    if (btn) btn.remove();
+}
+window.checkDemoMode = checkDemoMode;
+
 document.addEventListener('DOMContentLoaded', () => {
     // Lo primero: dejar constancia de qué versión se está ejecutando.
     pintarVersionApp();
@@ -434,6 +645,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderBancos();
     initBusinessMode();
     renderKitchenDisplay();
+    checkDemoMode();
+    pintarTasaUI();
 
     // Campos de teléfono: pista en vivo + normalización al salir del campo.
     // Así se escribe el número local de siempre y el +58 se añade solo.
@@ -525,6 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchRates();
         setupBarcodeScanner();
         setupKeyboardShortcuts();
+        syncThemeIcon();
 
         // Si hay ventas offline en cola pendientes al iniciar sesión y hay conexión, sincronizar
         if (navigator.onLine && offlineSalesQueue.length > 0) {
@@ -545,7 +759,8 @@ function loadCachedData() {
         if (Array.isArray(cachedProducts) && cachedProducts.length) {
             products = cachedProducts;
             renderPOSProducts();
-            if (isAdmin && typeof renderInventory === 'function') renderInventory();
+            const activeTab = document.querySelector('.tab-content.active')?.id?.replace('tab-', '') || 'ventas';
+    if (isAdmin && activeTab === 'inventario' && typeof renderInventory === 'function') renderInventory();
         }
         const cachedClientes = leerCache('clientes');
         if (Array.isArray(cachedClientes) && cachedClientes.length) {
@@ -558,12 +773,7 @@ function loadCachedData() {
         const cachedRates = leerCache('rates');
         if (cachedRates) {
             rates = cachedRates;
-            const rateBcv = document.getElementById('rate-bcv');
-            if (rateBcv) rateBcv.innerHTML = `Bs ${rates.bcv.toFixed(2)}`;
-            const rateUsdt = document.getElementById('rate-usdt');
-            if (rateUsdt) rateUsdt.textContent = `Bs ${rates.usdt.toFixed(2)}`;
-            const rateEur = document.getElementById('rate-eur');
-            if (rateEur) rateEur.textContent = `Bs ${rates.eur.toFixed(2)}`;
+            pintarTasaUI();
         }
         const cachedConfig = leerCache('storeConfig');
         if (cachedConfig) {
@@ -578,6 +788,22 @@ function loadCachedData() {
         }
         // La cola de ventas pendientes también pertenece a ESTE usuario.
         offlineSalesQueue = leerCache('offline_sales_queue') || [];
+    recuperarVentasOfflineIndexedDB().then(idbSales => {
+        if (idbSales && idbSales.length > 0) {
+            const currentIds = new Set(offlineSalesQueue.map(s => s && s.id));
+            let added = false;
+            idbSales.forEach(s => {
+                if (s && s.id && !currentIds.has(s.id)) {
+                    offlineSalesQueue.push(s);
+                    added = true;
+                }
+            });
+            if (added) {
+                guardarCache('offline_sales_queue', offlineSalesQueue);
+                updateNetworkStatusUI();
+            }
+        }
+    }).catch(() => {});
         updateNetworkStatusUI();
     } catch (e) {
         console.warn('Error al cargar datos locales en caché:', e);
@@ -734,7 +960,7 @@ function renderOfflineSyncModalData() {
     const elClients = document.getElementById('offline-cached-clients-count');
     if (elClients) elClients.textContent = clientes.length;
     const elRate = document.getElementById('offline-cached-rate-bcv');
-    if (elRate) elRate.textContent = `Bs ${(rates && rates.bcv ? rates.bcv : 36.5).toFixed(2)}`;
+    if (elRate) elRate.textContent = formatBs(getBcvRate());
     const elFact = document.getElementById('offline-cached-factura');
     if (elFact) elFact.textContent = `#${storeConfig.nroFactura || 1001}`;
 
@@ -952,6 +1178,7 @@ async function sincronizarVentasOffline(manual = false) {
         const idsConfirmados = new Set(sincronizadas.map(s => s.id));
         offlineSalesQueue = offlineSalesQueue.filter(s => s && !idsConfirmados.has(s.id));
         guardarCache('offline_sales_queue', offlineSalesQueue);
+        idsConfirmados.forEach(id => eliminarVentaOfflineIndexedDB(id));
 
         if (sincronizadas.length > 0) {
             storeConfig.nroFactura = maxFactura;
@@ -997,7 +1224,7 @@ async function sincronizarVentasOffline(manual = false) {
 
 function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplicado, vueltoUsd, selectedVueltoOption) {
     const btn = document.getElementById('btn-confirm-sale');
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     // 1. Descontar stock localmente
     cartItems.forEach(i => {
@@ -1054,9 +1281,10 @@ function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplic
         offlineCreatedAt: new Date().toISOString()
     };
 
-    // 5. Agregar a cola offline persistente
+    // 5. Agregar a cola offline persistente (Doble capa: localStorage + IndexedDB)
     offlineSalesQueue.push(offlineSale);
     guardarCache('offline_sales_queue', offlineSalesQueue);
+    guardarVentaOfflineIndexedDB(offlineSale);
 
     // 6. Agregar a historial local en memoria para ver reflejado en dashboard
     salesHistory.unshift(offlineSale);
@@ -1076,7 +1304,7 @@ function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplic
     }
 
     // 8. Limpiar carrito y cerrar modal
-    clearCart();
+    clearCart(true);
     closePaymentModal();
     updateNetworkStatusUI();
     renderPOSProducts();
@@ -1115,13 +1343,26 @@ function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplic
 // =====================================================
 // TEMA Y UTILIDADES
 // =====================================================
+function syncThemeIcon() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+        icon.className = isDark ? 'fa-solid fa-sun text-amber-400 text-xs' : 'fa-solid fa-moon text-slate-600 dark:text-amber-400 text-xs';
+    }
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+        metaTheme.setAttribute('content', isDark ? '#07090e' : '#ffffff');
+    }
+}
+window.syncThemeIcon = syncThemeIcon;
+
 function toggleTheme() {
     document.documentElement.classList.toggle('dark');
     const isDark = document.documentElement.classList.contains('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    if (typeof updateDashboardCharts === 'function') updateDashboardCharts();
-    const icon = document.getElementById('theme-icon');
-    if (icon) icon.className = isDark ? 'fa-solid fa-sun text-amber-400 text-sm' : 'fa-solid fa-moon text-slate-600 text-sm';
+    syncThemeIcon();
+    const activeTabCharts = document.querySelector('.tab-content.active')?.id?.replace('tab-', '') || 'ventas';
+    if (activeTabCharts === 'reportes' && typeof updateDashboardCharts === 'function') updateDashboardCharts();
 }
 
 function renderBancos() {
@@ -1399,6 +1640,19 @@ function switchTab(tabId) {
         btn.classList.add('active');
         btn.classList.remove('hover:bg-white/50');
     }
+    // Carga bajo demanda (Lazy Load) de módulos pesados al activar la pestaña
+    if (tabId === 'inventario' && typeof renderInventory === 'function') renderInventory();
+    if (tabId === 'reportes') {
+        if (typeof renderReportes === 'function') renderReportes();
+        ensureChartJs().then(() => {
+            if (typeof updateDashboardCharts === 'function') updateDashboardCharts();
+        }).catch(err => console.warn('Chart.js no disponible:', err));
+    }
+    if (tabId === 'compras') {
+        if (typeof renderProveedores === 'function') renderProveedores();
+        if (typeof renderOrdenesCompra === 'function') renderOrdenesCompra();
+    }
+    if (tabId === 'libro-fiscal' && typeof calcularLibroVentas === 'function') calcularLibroVentas();
     if (tabId === 'mermas') populateMermasSelect();
     if (tabId === 'fiados') renderCuadernoFiados();
     if (tabId === 'clientes') renderClientes();
@@ -1413,6 +1667,23 @@ function switchTab(tabId) {
 // =====================================================
 // TASAS Y CONFIGURACIÓN
 // =====================================================
+function pintarTasaUI() {
+    const rateBcv = document.getElementById('rate-bcv');
+    if (rateBcv) {
+        const tasaActual = getBcvRate();
+        const formatted = formatBs(tasaActual);
+        const horaStr = rateMetadata.lastUpdated ? new Date(rateMetadata.lastUpdated).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '';
+        const modoStr = rateMetadata.isManual ? 'Manual' : 'Oficial';
+        const titleStr = `Tasa BCV (${modoStr})${horaStr ? ' · Act: ' + horaStr : ''}`;
+        rateBcv.innerHTML = `<span title="${titleStr}" class="cursor-pointer inline-flex items-center gap-1">${formatted}${rateMetadata.isManual ? ' <span class="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold px-1 rounded">M</span>' : ''}</span>`;
+    }
+    const rateUsdt = document.getElementById('rate-usdt');
+    if (rateUsdt && rates.usdt) rateUsdt.textContent = formatBs(rates.usdt);
+    const rateEur = document.getElementById('rate-eur');
+    if (rateEur && rates.eur) rateEur.textContent = formatBs(rates.eur);
+}
+window.pintarTasaUI = pintarTasaUI;
+
 async function fetchRates() {
     try {
         if (navigator.onLine) {
@@ -1422,18 +1693,41 @@ async function fetchRates() {
             ]);
             const dataUsd = await resUsd.json();
             const dataEur = await resEur.json();
-            autoRates.bcv = dataUsd.find(d => d.fuente === 'oficial')?.promedio || autoRates.bcv;
+            const bcvPromedio = dataUsd.find(d => d.fuente === 'oficial')?.promedio;
+            if (bcvPromedio && bcvPromedio > 0) {
+                autoRates.bcv = bcvPromedio;
+                rateMetadata.lastUpdated = new Date().toISOString();
+                localStorage.setItem('pos_bcv_rate_updated', rateMetadata.lastUpdated);
+                localStorage.setItem('pos_last_bcv_rate', String(bcvPromedio));
+            }
             autoRates.usdt = dataUsd.find(d => d.fuente === 'paralelo')?.promedio || autoRates.usdt;
             autoRates.eur = dataEur.find(d => d.fuente === 'oficial')?.promedio || autoRates.eur;
         }
     } catch (e) {
-        console.warn('No se pudo conectar a dolarapi (modo offline o bloqueo de red):', e);
+        console.warn('No se pudo conectar a dolarapi (modo offline o bloqueo de red). Usando última tasa guardada:', e);
+        const cachedRate = parseFloat(localStorage.getItem('pos_last_bcv_rate'));
+        if (cachedRate && !isNaN(cachedRate) && cachedRate > 0) {
+            autoRates.bcv = cachedRate;
+        }
     }
     
     activeListeners.push(getDb('settings').doc('general').onSnapshot(doc => {
         if (doc && doc.exists) {
             const data = doc.data();
-            rates.bcv = data.tasaManual ? data.tasaManual : autoRates.bcv;
+            if (data.tasaManual) {
+                rates.bcv = parseFloat(data.tasaManual);
+                rateMetadata.isManual = true;
+                localStorage.setItem('pos_bcv_rate_is_manual', 'true');
+                if (data.tasaManualUpdated) {
+                    rateMetadata.lastUpdated = data.tasaManualUpdated;
+                    localStorage.setItem('pos_bcv_rate_updated', rateMetadata.lastUpdated);
+                }
+            } else {
+                rates.bcv = autoRates.bcv;
+                rateMetadata.isManual = false;
+                localStorage.setItem('pos_bcv_rate_is_manual', 'false');
+            }
+            localStorage.setItem('pos_last_bcv_rate', String(rates.bcv));
             storeConfig.name = data.storeName || 'GestiónPro';
             storeConfig.rif = data.storeRif || '';
             storeConfig.logo = data.storeLogo || '';
@@ -1470,12 +1764,7 @@ async function fetchRates() {
         const rifEl = document.getElementById('sidebar-store-rif');
         if (rifEl) rifEl.textContent = storeConfig.rif ? `RIF: ${storeConfig.rif}` : '';
         pintarLogo(document.getElementById('sidebar-store-logo'), storeConfig.logo);
-        const rateBcv = document.getElementById('rate-bcv');
-        if (rateBcv) rateBcv.innerHTML = `Bs ${rates.bcv.toFixed(2)}`;
-        const rateUsdt = document.getElementById('rate-usdt');
-        if (rateUsdt) rateUsdt.textContent = `Bs ${rates.usdt.toFixed(2)}`;
-        const rateEur = document.getElementById('rate-eur');
-        if (rateEur) rateEur.textContent = `Bs ${rates.eur.toFixed(2)}`;
+        pintarTasaUI();
         
         updateCartUI();
         if (isAdmin) {
@@ -1501,9 +1790,27 @@ async function editarTasa() {
     });
     if (nuevaTasa !== undefined) {
         if (nuevaTasa === '') {
-            getDb('settings').doc('general').set({ tasaManual: firebase.firestore.FieldValue.delete() }, { merge: true });
+            rateMetadata.isManual = false;
+            localStorage.setItem('pos_bcv_rate_is_manual', 'false');
+            getDb('settings').doc('general').set({
+                tasaManual: firebase.firestore.FieldValue.delete(),
+                tasaManualUpdated: firebase.firestore.FieldValue.delete()
+            }, { merge: true });
         } else {
-            getDb('settings').doc('general').set({ tasaManual: parseFloat(nuevaTasa) }, { merge: true });
+            const tasaNum = parseFloat(nuevaTasa);
+            rates.bcv = tasaNum;
+            rateMetadata.isManual = true;
+            rateMetadata.lastUpdated = new Date().toISOString();
+            localStorage.setItem('pos_bcv_rate_is_manual', 'true');
+            localStorage.setItem('pos_bcv_rate_updated', rateMetadata.lastUpdated);
+            localStorage.setItem('pos_last_bcv_rate', String(tasaNum));
+            getDb('settings').doc('general').set({
+                tasaManual: tasaNum,
+                tasaManualUpdated: rateMetadata.lastUpdated
+            }, { merge: true });
+            pintarTasaUI();
+            updateCartUI();
+            if (typeof renderPOSProducts === 'function') renderPOSProducts();
         }
         Swal.fire('¡Actualizado!', 'La tasa ha sido guardada.', 'success');
     }
@@ -2457,7 +2764,8 @@ function procesarCodigoEscaneado(val) {
         (p.categoria || '').toLowerCase().includes(val) ||
         (p.codigo || '').toLowerCase().includes(val)
     );
-    if (filtered.length >= 1) {
+    // Solo auto-agregar si hay exactamente 1 coincidencia; si hay múltiples, dejar que el cajero seleccione
+    if (filtered.length === 1) {
         const f = filtered[0];
         const fTipoLower = String(f.tipo || '').toLowerCase().trim();
         const fIsUnidad = !f.tipo || ['unidad', 'und', 'unid', 'pz', 'pieza'].includes(fTipoLower);
@@ -2486,7 +2794,14 @@ async function openCameraScanner() {
         if (content) content.classList.remove('scale-95');
     }, 10);
     if (typeof Html5Qrcode === 'undefined') {
-        document.getElementById('camera-reader').innerHTML = '<p class="text-rose-400 p-4">Librería no disponible.</p>';
+        try {
+            await ensureHtml5Qrcode();
+        } catch (err) {
+            console.warn('Fallo cargando Html5Qrcode:', err);
+        }
+    }
+    if (typeof Html5Qrcode === 'undefined') {
+        document.getElementById('camera-reader').innerHTML = '<p class="text-rose-400 p-4">Librería de cámara no disponible.</p>';
         return;
     }
     try {
@@ -2525,6 +2840,40 @@ async function closeCameraScanner() {
     }
 }
 
+
+// =====================================================
+// ÍNDICE LOCAL Y MOTOR DE BÚSQUEDA OPTIMIZADO (DEBOUNCE 150ms)
+// =====================================================
+let _searchDebounceTimer = null;
+let _posSearchIndex = [];
+let _posRenderLimit = 60; // Renderizado por bloques para evitar saturar el DOM
+
+// Función para normalizar texto (sin tildes, minúsculas, espacios recortados)
+function normalizarTextoBusqueda(str) {
+    if (!str) return '';
+    return String(str)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+// Reconstruye el índice de búsqueda en memoria cuando cambia el inventario
+function actualizarIndiceBusquedaPOS() {
+    _posSearchIndex = (products || []).map(p => {
+        const nom = normalizarTextoBusqueda(p.nombre);
+        const cat = normalizarTextoBusqueda(p.categoria);
+        const cod = normalizarTextoBusqueda(p.codigo);
+        const marca = normalizarTextoBusqueda(p.marca);
+        return {
+            id: p.id,
+            normText: `${nom} ${cat} ${cod} ${marca}`,
+            categoria: p.categoria || 'General',
+            product: p
+        };
+    });
+}
+
 function setupBarcodeScanner() {
     const input = document.getElementById('search-pos');
     if (!input) return;
@@ -2537,26 +2886,54 @@ function setupBarcodeScanner() {
             if (exito) {
                 input.value = '';
                 triggerSearch('');
+            } else {
+                // Si no fue código de barras pero el término arrojó exactamente 1 producto visible en el grid:
+                const queryNorm = normalizarTextoBusqueda(val);
+                const filtradosActuales = products.filter(p => {
+                    if (currentPOSCategory !== 'Todos' && p.categoria !== currentPOSCategory) return false;
+                    const idx = _posSearchIndex.get(p.id) || normalizarTextoBusqueda(p.nombre + ' ' + (p.codigo || ''));
+                    return idx.includes(queryNorm);
+                });
+                if (filtradosActuales.length === 1) {
+                    const prodUnico = filtradosActuales[0];
+                    if (prodUnico.stock > 0) {
+                        const tLower = String(prodUnico.tipo || '').toLowerCase().trim();
+                        const isUnd = !prodUnico.tipo || ['unidad', 'und', 'unid', 'pz', 'pieza'].includes(tLower);
+                        if (isUnd || storeConfig.businessType === 'comida_rapida') {
+                            addToCart(prodUnico, 1);
+                        } else {
+                            addToCartPrompt(prodUnico.id);
+                        }
+                        input.value = '';
+                        triggerSearch('');
+                    }
+                }
             }
         }
     });
-    input.addEventListener('input', (e) => triggerSearch(e.target.value.toLowerCase()));
-}
 
-function triggerSearch(t) {
-    const cards = document.getElementById('pos-products-grid')?.children;
-    if (!cards) return;
-    products.forEach((p, i) => {
-        if (cards[i]) {
-            const nom = (p.nombre || '').toLowerCase();
-            const cat = (p.categoria || '').toLowerCase();
-            const cod = (p.codigo || '').toLowerCase();
-            const matchesText = !t || (nom.includes(t) || cat.includes(t) || cod.includes(t));
-            const matchesCat = (currentPOSCategory === 'Todos') || (p.categoria === currentPOSCategory);
-            cards[i].style.display = (matchesText && matchesCat) ? 'flex' : 'none';
-        }
+    // Debounce de 150 ms para tecleo fluido en celular y computadoras modestas
+    input.addEventListener('input', (e) => {
+        clearTimeout(_searchDebounceTimer);
+        const query = e.target.value;
+        _searchDebounceTimer = setTimeout(() => {
+            triggerSearch(query);
+        }, 150);
     });
 }
+
+function triggerSearch(queryRaw) {
+    const query = normalizarTextoBusqueda(queryRaw);
+    renderPOSProductsConFiltro(query, currentPOSCategory);
+}
+
+function filterPOSByCategory(catEncoded) {
+    currentPOSCategory = decodeURIComponent(catEncoded);
+    renderPOSCategoryChips();
+    const searchVal = document.getElementById('search-pos')?.value || '';
+    triggerSearch(searchVal);
+}
+window.filterPOSByCategory = filterPOSByCategory;
 
 function renderPOSCategoryChips() {
     const container = document.getElementById('pos-category-chips');
@@ -2578,42 +2955,58 @@ function renderPOSCategoryChips() {
 }
 window.renderPOSCategoryChips = renderPOSCategoryChips;
 
-function filterPOSByCategory(catEncoded) {
-    currentPOSCategory = decodeURIComponent(catEncoded);
-    renderPOSCategoryChips();
-    
-    const searchVal = document.getElementById('search-pos')?.value.toLowerCase().trim() || '';
-    const cards = document.getElementById('pos-products-grid')?.children;
-    if (!cards) return;
-    
-    products.forEach((p, i) => {
-        if (cards[i]) {
-            const nom = (p.nombre || '').toLowerCase();
-            const cat = (p.categoria || '').toLowerCase();
-            const cod = (p.codigo || '').toLowerCase();
-            const matchesText = !searchVal || (nom.includes(searchVal) || cat.includes(searchVal) || cod.includes(searchVal));
-            const matchesCat = (currentPOSCategory === 'Todos') || (p.categoria === currentPOSCategory);
-            cards[i].style.display = (matchesText && matchesCat) ? 'flex' : 'none';
-        }
-    });
-}
-window.filterPOSByCategory = filterPOSByCategory;
-
 function renderPOSProducts() {
+    actualizarIndiceBusquedaPOS();
+    renderPOSCategoryChips();
+    const searchVal = document.getElementById('search-pos')?.value || '';
+    renderPOSProductsConFiltro(normalizarTextoBusqueda(searchVal), currentPOSCategory);
+}
+
+function renderPOSProductsConFiltro(queryNorm = '', categoriaFiltro = 'Todos') {
     const grid = document.getElementById('pos-products-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    renderPOSCategoryChips();
-    const currentBcv = rates.bcv || 1;
-    products.forEach(p => {
+
+    // Filtrar con el índice rápido en memoria
+    let filtrados = [];
+    if (!_posSearchIndex || _posSearchIndex.length !== products.length) {
+        actualizarIndiceBusquedaPOS();
+    }
+
+    _posSearchIndex.forEach(item => {
+        const matchCat = (categoriaFiltro === 'Todos') || (item.categoria === categoriaFiltro);
+        const matchText = !queryNorm || item.normText.includes(queryNorm);
+        if (matchCat && matchText) {
+            filtrados.push(item.product);
+        }
+    });
+
+    if (filtrados.length === 0) {
+        grid.innerHTML = `
+            <div class="col-span-full py-12 text-center text-slate-400">
+                <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                    <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                </div>
+                <p class="font-bold text-sm text-slate-600 dark:text-slate-300">No se encontraron productos</p>
+                <p class="text-xs text-slate-400 mt-1">Prueba con otro término de búsqueda o selecciona otra categoría.</p>
+            </div>`;
+        return;
+    }
+
+    // Paginación virtualizada / por bloques (muestra los primeros N)
+    const itemsAMostrar = filtrados.slice(0, _posRenderLimit);
+    const fragment = document.createDocumentFragment();
+
+    itemsAMostrar.forEach(p => {
         const precioNum = parseFloat(p.precio) || 0;
         const stockNum = parseFloat(p.stock) || 0;
-        const precioBs = (precioNum * currentBcv).toFixed(2);
+        const precioBs = usdToBs(precioNum);
         const vencInfo = getVencimientoInfo(p.fechaVencimiento);
         let vencBadge = '';
         if (vencInfo && (vencInfo.status === 'critico' || vencInfo.status === 'vencido')) {
             vencBadge = `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded-md ${vencInfo.status === 'vencido' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}">${vencInfo.status === 'vencido' ? 'VENCIDO' : vencInfo.dias + 'd'}</span>`;
         }
+
         const c = document.createElement('div');
         c.className = "animated-card group bg-white/90 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/70 dark:border-slate-700/60 rounded-2xl p-4 cursor-pointer flex flex-col justify-between shadow-xs hover:shadow-md transition-all active:scale-[0.98]";
         c.onclick = () => {
@@ -2632,7 +3025,7 @@ function renderPOSProducts() {
 
         const imgBannerHtml = p.imagen ? `
             <div class="w-full h-24 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700/60 mb-2.5 relative flex items-center justify-center border border-slate-100 dark:border-slate-700/50">
-                <img src="${p.imagen}" alt="${p.nombre}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.parentElement.style.display='none';">
+                <img src="${p.imagen}" alt="${p.nombre}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.parentElement.style.display='none';">
             </div>
         ` : '';
 
@@ -2650,19 +3043,36 @@ function renderPOSProducts() {
             </div>
             <div class="mt-3.5 pt-2.5 border-t border-slate-100 dark:border-slate-700/60 flex justify-between items-end">
                 <div>
-                    <div class="text-emerald-600 dark:text-emerald-400 font-black text-xl tabular-nums leading-tight">$${precioNum.toFixed(2)}</div>
-                    <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 tabular-nums">Bs ${precioBs}</div>
+                    <div class="text-emerald-600 dark:text-emerald-400 font-black text-xl tabular-nums leading-tight">${formatUSD(precioNum)}</div>
+                    <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 tabular-nums">${formatBs(precioBs)}</div>
                 </div>
-                <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-xl tabular-nums shrink-0">${stockNum.toFixed(1)} ${p.tipo}</span>
+                <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-xl tabular-nums shrink-0">${formatQty(stockNum, p.tipo)} ${p.tipo}</span>
             </div>`;
-        grid.appendChild(c);
+        fragment.appendChild(c);
     });
 
-    // Si había una categoría seleccionada previamente, aplicarla al re-renderizar
-    if (currentPOSCategory !== 'Todos') {
-        filterPOSByCategory(encodeURIComponent(currentPOSCategory));
+    grid.appendChild(fragment);
+
+    // Botón de cargar más si hay productos pendientes
+    if (filtrados.length > _posRenderLimit) {
+        const moreContainer = document.createElement('div');
+        moreContainer.className = "col-span-full py-4 text-center";
+        moreContainer.innerHTML = `
+            <button type="button" onclick="cargarMasProductosPOS()" class="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs shadow-xs transition-all">
+                <i class="fa-solid fa-angles-down mr-1"></i> Mostrando ${_posRenderLimit} de ${filtrados.length} productos · Cargar 60 más
+            </button>
+        `;
+        grid.appendChild(moreContainer);
     }
 }
+
+function cargarMasProductosPOS() {
+    _posRenderLimit += 60;
+    const searchVal = document.getElementById('search-pos')?.value || '';
+    renderPOSProductsConFiltro(normalizarTextoBusqueda(searchVal), currentPOSCategory);
+}
+window.cargarMasProductosPOS = cargarMasProductosPOS;
+
 
 // =====================================================
 // TICKET EN ESPERA (PARK / HOLD CART) & ATAJOS GLOBALES
@@ -2758,7 +3168,7 @@ function setupKeyboardShortcuts() {
         const paymentModal = document.getElementById('payment-modal');
         const isPaymentOpen = paymentModal && !paymentModal.classList.contains('hidden');
 
-        // Escape: cerrar modales abiertos
+        // Escape: cerrar modales abiertos y re-enfocar el buscador del POS
         if (e.key === 'Escape') {
             if (isPaymentOpen) {
                 closePaymentModal();
@@ -2770,16 +3180,22 @@ function setupKeyboardShortcuts() {
                 return;
             }
             const searchPos = document.getElementById('search-pos');
-            if (searchPos && activeEl === searchPos && searchPos.value) {
-                searchPos.value = '';
-                triggerSearch('');
+            if (searchPos) {
+                if (activeEl === searchPos && searchPos.value) {
+                    searchPos.value = '';
+                    triggerSearch('');
+                } else {
+                    searchPos.focus();
+                    searchPos.select();
+                }
                 return;
             }
         }
 
         // Si el Terminal de Cobro está abierto:
         if (isPaymentOpen) {
-            if (e.key === 'Enter') {
+            // F4 o Enter confirma la venta de inmediato si el monto está completo o hay fiado
+            if (e.key === 'F4' || e.key === 'Enter') {
                 const btnConfirm = document.getElementById('btn-confirm-sale');
                 if (btnConfirm && !btnConfirm.disabled) {
                     e.preventDefault();
@@ -2791,13 +3207,13 @@ function setupKeyboardShortcuts() {
                 if (e.key === '1' || e.key === 'F1') {
                     e.preventDefault();
                     quickExactPayment('usd');
-                } else if (e.key === '2' || e.key === 'F2') {
+                } else if (e.key === '2') {
                     e.preventDefault();
                     quickExactPayment('pago-movil');
-                } else if (e.key === '3' || e.key === 'F3') {
+                } else if (e.key === '3') {
                     e.preventDefault();
                     quickExactPayment('punto');
-                } else if (e.key === '4' || e.key === 'F4') {
+                } else if (e.key === '4') {
                     e.preventDefault();
                     quickExactPayment('efectivo-bs');
                 }
@@ -2844,10 +3260,10 @@ function setupKeyboardShortcuts() {
 window.setupKeyboardShortcuts = setupKeyboardShortcuts;
 
 async function openVentaRapidaModal() {
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     
     const { value: formValues } = await Swal.fire({
-        title: '⚡ Venta Rápida / Varios',
+        title: '⚡ Cobro por Monto Libre / Varios',
         html: `
             <div class="space-y-3 text-left">
                 <p class="text-xs text-slate-500 dark:text-slate-400">Ingresa un monto directo para cobrar sin registrar el producto en inventario.</p>
@@ -3079,11 +3495,10 @@ function updateLivePesoTotals() {
     const val = parsePesoValue(input.value);
     const validVal = (!isNaN(val) && val > 0) ? val : 0;
     const totUsd = roundMoney(validVal * currentPesoModalState.precioBase);
-    const bcv = rates.bcv || 1;
-    const totBs = totUsd * bcv;
+    const totBs = usdToBs(totUsd);
 
-    usdEl.textContent = `${totUsd.toFixed(2)}`;
-    bsEl.textContent = `Bs ${totBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    usdEl.textContent = formatUSD(totUsd);
+    bsEl.textContent = formatBs(totBs);
 }
 
 function confirmarPesoModal() {
@@ -3294,7 +3709,7 @@ function updateCartUI() {
     el.innerHTML = '';
     currentSaleTotal = 0;
     let subtotal = 0;
-    const currentBcv = rates.bcv || 1;
+    const currentBcv = getBcvRate();
     const isComidaMode = storeConfig.businessType === 'comida_rapida';
 
     // Actualizar badge en la cabecera del ticket
@@ -3325,8 +3740,8 @@ function updateCartUI() {
             i.precio = precioUnitarioNum;
             const sub = roundMoney(precioUnitarioNum * i.qty);
             subtotal += sub;
-            const subBs = (sub * currentBcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            const precioUnitario = precioUnitarioNum.toFixed(2);
+            const subBs = formatBsFromUSD(sub);
+            const precioUnitario = formatUSD(precioUnitarioNum);
             const marcaBadge = i.marca ? `<span class="inline-block text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/40">${i.marca}</span>` : '';
 
             const imgCartHtml = i.imagen ? `
@@ -3363,7 +3778,11 @@ function updateCartUI() {
                 itemIndexSuffix = ` <span class="text-[9px] text-orange-600 dark:text-orange-400 font-black bg-orange-100 dark:bg-orange-950/70 border border-orange-200 dark:border-orange-900/40 px-1.5 py-0.5 rounded-md ml-1 whitespace-nowrap">Plato #${itemNumber}</span>`;
             }
 
-            const customizeBtnHtml = isComidaMode ? `
+            const catLower = String(i.categoria || '').toLowerCase().trim();
+            const isComidaPlato = ['hamburguesas', 'perros', 'pepitos', 'shawarma', 'pizzas', 'comida', 'platos', 'cocina', 'calle'].some(c => catLower.includes(c));
+            const showCustomizer = isComidaMode && (isComidaPlato || (i.modificadores && i.modificadores.salsas));
+
+            const customizeBtnHtml = showCustomizer ? `
                 <div class="mt-2 pt-1 border-t border-slate-100 dark:border-slate-700/40 flex items-center gap-1 flex-wrap">
                     <button type="button" onclick="aplicarModificadorRapido(${idx}, 'con_todo')" class="py-1 px-1.5 rounded-lg bg-orange-100 hover:bg-orange-200 dark:bg-orange-950/60 dark:hover:bg-orange-900/60 text-orange-800 dark:text-orange-300 font-black text-[9px] transition-all flex items-center justify-center gap-1 active:scale-95" title="Aplicar todas las salsas clásicas en 1 toque">
                         <i class="fa-solid fa-check-double text-[8px]"></i> Con Todo
@@ -3418,7 +3837,7 @@ function updateCartUI() {
                                 <i class="fa-solid fa-minus text-[9px]"></i>
                             </button>
                             <div onclick="editCartQty(${idx})" class="px-2 py-0.5 text-center cursor-pointer select-none hover:bg-white/50 dark:hover:bg-slate-600/30 rounded-md transition-colors" title="Clic para escribir cantidad exacta">
-                                <span class="text-xs font-black text-slate-800 dark:text-slate-100 tabular-nums">${i.qty}</span>
+                                <span class="text-xs font-black text-slate-800 dark:text-slate-100 tabular-nums">${formatQty(i.qty, i.tipo)}</span>
                                 <span class="text-[9px] font-bold text-slate-400 dark:text-slate-400 ml-0.5">${i.tipo}</span>
                             </div>
                             <button type="button" onclick="changeCartQty(${idx}, 1)" class="w-6 h-6 rounded-lg bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-200 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-slate-700 font-bold text-xs flex items-center justify-center shadow-2xs active:scale-90 transition-all" title="Sumar">
@@ -3429,12 +3848,12 @@ function updateCartUI() {
                         <!-- Precios Bimonetarios alineados a la derecha -->
                         <div class="text-right">
                             <div class="font-black text-slate-900 dark:text-white text-xs sm:text-sm tabular-nums leading-tight">
-                                $${sub.toFixed(2)}
+                                ${formatUSD(sub)}
                             </div>
                             <div class="text-[10px] font-semibold text-slate-400 dark:text-slate-400 tabular-nums leading-tight mt-0.5">
-                                Bs ${subBs}
+                                ${subBs}
                             </div>
-                            ${i.qty > 1 ? `<div class="text-[9px] text-slate-400 dark:text-slate-500 font-medium leading-none mt-0.5">($${precioUnitario} c/u)</div>` : ''}
+                            ${i.qty > 1 ? `<div class="text-[9px] text-slate-400 dark:text-slate-500 font-medium leading-none mt-0.5">(${precioUnitario} c/u)</div>` : ''}
                         </div>
                     </div>
                 </div>`;
@@ -3446,10 +3865,10 @@ function updateCartUI() {
     const discEl = document.getElementById('cart-discount');
     const totEl = document.getElementById('cart-total');
     const totBsEl = document.getElementById('cart-total-bs');
-    if (subEl) subEl.textContent = '$' + subtotal.toFixed(2);
-    if (discEl) discEl.textContent = '-$' + currentDiscount.toFixed(2);
-    if (totEl) totEl.textContent = '$' + currentSaleTotal.toFixed(2);
-    if (totBsEl) totBsEl.textContent = 'Bs ' + (currentSaleTotal * currentBcv).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (subEl) subEl.textContent = formatUSD(subtotal);
+    if (discEl) discEl.textContent = '-' + formatUSD(currentDiscount);
+    if (totEl) totEl.textContent = formatUSD(currentSaleTotal);
+    if (totBsEl) totBsEl.textContent = formatBsFromUSD(currentSaleTotal);
 }
 
 // =====================================================
@@ -3505,11 +3924,35 @@ async function promptDiscount() {
     }
 }
 
-function clearCart() {
+function clearCart(silent = false) {
+    if (!silent && cart.length > 0) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '¿Vaciar el ticket actual?',
+                text: 'Se eliminarán todos los productos agregados al ticket.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Sí, vaciar ticket',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    cart = [];
+                    currentDiscount = 0;
+                    puntosCanjeadosVenta = 0;
+                    updateCartUI();
+                    document.getElementById('search-pos')?.focus();
+                }
+            });
+            return;
+        }
+    }
     cart = [];
     currentDiscount = 0;
     puntosCanjeadosVenta = 0;
     updateCartUI();
+    document.getElementById('search-pos')?.focus();
 }
 
 // =====================================================
@@ -3579,7 +4022,7 @@ function onClienteSelectChange() {
 
     // Saldo a Favor
     const saldoFavor = c.saldoFavorUsd || 0;
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     if (saldoFavorBanner && saldoFavorText && btnAplicarSaldo) {
         if (saldoFavor > 0) {
@@ -3645,8 +4088,8 @@ async function canjearPuntos() {
         puntosCanjeadosVenta += puntosAUsar;
         currentDiscount += descUsd;
         updateCartUI();
-        document.getElementById('pay-total-usd').textContent = `$${currentSaleTotal.toFixed(2)}`;
-        document.getElementById('pay-total-bs').textContent = `Bs ${(currentSaleTotal * rates.bcv).toFixed(2)}`;
+        document.getElementById('pay-total-usd').textContent = formatUSD(currentSaleTotal);
+        document.getElementById('pay-total-bs').textContent = formatBsFromUSD(currentSaleTotal);
         calculateChange();
         onClienteSelectChange();
         Swal.fire('¡Canjeado!', `Descuento $${descUsd} por ${puntosAUsar} pts`, 'success');
@@ -3662,8 +4105,8 @@ function openPaymentModal() {
     saldoFavorAplicadoVenta = 0;
     selectedVueltoOption = 'efectivoUsd';
 
-    document.getElementById('pay-total-usd').textContent = `$${currentSaleTotal.toFixed(2)}`;
-    document.getElementById('pay-total-bs').textContent = `Bs ${(currentSaleTotal * rates.bcv).toFixed(2)}`;
+    document.getElementById('pay-total-usd').textContent = formatUSD(currentSaleTotal);
+    document.getElementById('pay-total-bs').textContent = formatBsFromUSD(currentSaleTotal);
     ['efectivo-usd', 'zelle-usd', 'efectivo-bs', 'punto-bs', 'pago-movil-bs'].forEach(id => {
         const el = document.getElementById(`pay-${id}`);
         if (el) el.value = '';
@@ -3705,7 +4148,7 @@ function setExactUsdBill(amount) {
 window.setExactUsdBill = setExactUsdBill;
 
 function quickExactPayment(method) {
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const netoACobrarUsd = Math.max(0, roundMoney(currentSaleTotal - saldoFavorAplicadoVenta));
     const totalBs = roundMoney(netoACobrarUsd * tasa);
 
@@ -3736,7 +4179,7 @@ function autoFillRemaining(method) {
     const bsEfectivo = parseFloat(document.getElementById('pay-efectivo-bs').value) || 0;
     const bsPunto = parseFloat(document.getElementById('pay-punto-bs').value) || 0;
     const bsPMovil = parseFloat(document.getElementById('pay-pago-movil-bs').value) || 0;
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
     const totalUsdPagado = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
@@ -3978,7 +4421,7 @@ function copiarDatosPagoMovilVuelto() {
     const tel = document.getElementById('vuelto-pm-telefono')?.value.trim() || '';
     const ci = document.getElementById('vuelto-pm-cedula')?.value.trim() || '';
     const banco = document.getElementById('vuelto-pm-banco')?.value || 'Banco';
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     const usdEfectivo = parseFloat(document.getElementById('pay-efectivo-usd').value) || 0;
     const usdZelle = parseFloat(document.getElementById('pay-zelle-usd').value) || 0;
@@ -4021,7 +4464,7 @@ function notificarVueltoPagoMovilWhatsApp() {
     const ci = document.getElementById('vuelto-pm-cedula')?.value.trim() || '';
     const banco = document.getElementById('vuelto-pm-banco')?.value || '';
     const ref = document.getElementById('vuelto-pm-ref')?.value.trim() || '';
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     const usdEfectivo = parseFloat(document.getElementById('pay-efectivo-usd').value) || 0;
     const usdZelle = parseFloat(document.getElementById('pay-zelle-usd').value) || 0;
@@ -4170,7 +4613,7 @@ function calculateChange() {
     if (bsPMovil > 0) bankContainer.classList.remove('hidden');
     else bankContainer.classList.add('hidden');
 
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
     const totalUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
     const diff = roundMoney(totalUsd - currentSaleTotal);
@@ -4180,7 +4623,7 @@ function calculateChange() {
     if (diff >= -0.01 || clienteId) {
         btn.disabled = false;
         btn.className = "w-full animated-btn bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-emerald-600/25 transition-all text-base";
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> Procesar Venta <span class="hidden sm:inline-block ml-2 text-xs font-mono font-bold bg-emerald-700/60 px-2 py-0.5 rounded-lg border border-emerald-400/40">[Enter ↵]</span>';
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Procesar Venta <span class="hidden sm:inline-block ml-2 text-xs font-mono font-black bg-emerald-700/60 px-2 py-0.5 rounded-lg border border-emerald-400/40">[F4 / Enter]</span>';
         if (diff < -0.01 && clienteId) {
             sBox.className = "p-3.5 rounded-2xl mb-4 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-200 font-extrabold text-xs border border-amber-200 dark:border-amber-800/60";
             sBox.innerHTML = `<i class="fa-solid fa-handshake mr-1 text-amber-600"></i> Venta a Crédito (Fiado): <b>$${Math.abs(diff).toFixed(2)}</b> (Bs ${(Math.abs(diff) * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2 })})`;
@@ -4264,7 +4707,7 @@ async function confirmSale() {
     const bancoPM = document.getElementById('pay-banco-pm').value || 'Otro';
     const clienteId = document.getElementById('pay-cliente').value;
 
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
     const totalPagadoUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
     const vueltoUsd = roundMoney(totalPagadoUsd > currentSaleTotal ? totalPagadoUsd - currentSaleTotal : 0);
@@ -4468,7 +4911,7 @@ async function confirmSale() {
         crearComandaCocina(onlineSaleData, saleRef.id);
     }
 
-    clearCart();
+    clearCart(true);
     closePaymentModal();
 
     if (typeof marcarCajaAbiertaPorVenta === 'function') {
@@ -4499,13 +4942,14 @@ function enviarTicketWhatsApp(s) {
         if (c && c.telefono) phone = c.telefono.replace(/[^0-9]/g, '');
     }
     const storeName = (storeConfig && storeConfig.name) ? storeConfig.name : 'Mi Negocio';
-    let lineas = s.items.map(i => `• ${i.qty} ${i.tipo} ${i.nombre} - $${(i.qty * i.precio).toFixed(2)}`).join('\n');
+    let lineas = s.items.map(i => `• ${i.qty} ${i.tipo} ${i.nombre} - ${formatUSD(i.qty * i.precio)}`).join('\n');
     let msg = `*${storeName.toUpperCase()}*\n🧾 *TICKET:* #${s.id.slice(-6).toUpperCase()}\n📅 *Fecha:* ${s.fechaStr}\n`;
     if (s.clienteNombre) msg += `👤 *Cliente:* ${s.clienteNombre}\n`;
     msg += `---------------------------\n${lineas}\n---------------------------\n`;
-    if (s.descuentoUsd > 0) msg += `🏷️ *Descuento:* -$${s.descuentoUsd.toFixed(2)}\n`;
-    if (s.saldoFavorAplicadoUsd > 0) msg += `🎁 *Saldo a Favor Usado:* -$${s.saldoFavorAplicadoUsd.toFixed(2)}\n`;
-    msg += `*TOTAL: $${s.totalUsd.toFixed(2)} (Bs ${(s.totalUsd * s.tasaBCV).toFixed(2)})*\n`;
+    if (s.descuentoUsd > 0) msg += `🏷️ *Descuento:* -${formatUSD(s.descuentoUsd)}\n`;
+    if (s.saldoFavorAplicadoUsd > 0) msg += `🎁 *Saldo a Favor Usado:* -${formatUSD(s.saldoFavorAplicadoUsd)}\n`;
+    const tasaTicket = s.tasaBCV || getBcvRate();
+    msg += `*TOTAL: ${formatUSD(s.totalUsd)} (${formatBs(s.totalUsd * tasaTicket)})*\n`;
     if (s.vuelto && s.vuelto.montoUsd > 0) {
         const metodoLabels = {
             efectivoUsd: 'Efectivo $',
@@ -4514,12 +4958,12 @@ function enviarTicketWhatsApp(s) {
             saldoFavor: 'Saldo a Favor Guardado'
         };
         const mLabel = metodoLabels[s.vuelto.metodo] || 'Efectivo';
-        msg += `💵 *Vuelto (${mLabel}):* $${s.vuelto.montoUsd.toFixed(2)} (Bs ${s.vuelto.montoBs.toFixed(2)})\n`;
+        msg += `💵 *Vuelto (${mLabel}):* ${formatUSD(s.vuelto.montoUsd)} (${formatBs(s.vuelto.montoBs)})\n`;
         if (s.vuelto.metodo === 'saldoFavor') {
             msg += `🎉 *¡Guardado como Saldo a Favor para tu próxima compra!*\n`;
         }
     }
-    if (s.fiadoUsd > 0) msg += `⚠️ *Fiado:* $${s.fiadoUsd.toFixed(2)}\n`;
+    if (s.fiadoUsd > 0) msg += `⚠️ *Fiado:* ${formatUSD(s.fiadoUsd)}\n`;
     if (s.puntosGanados > 0) msg += `🎁 *Puntos ganados:* +${s.puntosGanados} pts\n`;
     msg += `\n¡Gracias por su preferencia!`;
     if (phone) {
@@ -4544,10 +4988,13 @@ function enviarTicketWhatsApp(s) {
 /**
  * Motor de impresión 100% aislado para tickets POS
  * Utiliza un iframe invisible para evitar alterar el DOM de la aplicación o causar parpadeos,
- * pantallas oscurecidas o desfases en la pantalla del usuario.
+ * garantizando compatibilidad con cualquier impresora térmica ESC/POS de 58mm u 80mm.
  */
+
 function imprimirTicketAislado(htmlContent, options = {}) {
-    const width = options.width || '78mm';
+    const defaultWidth = (storeConfig && storeConfig.ticketWidth === '58mm') ? '58mm' : '78mm';
+    const width = options.width || defaultWidth;
+    const is58mm = width === '58mm';
     const isLandscape = options.landscape || false;
 
     // Crear o reutilizar un iframe invisible fuera de la pantalla
@@ -4585,8 +5032,8 @@ function imprimirTicketAislado(htmlContent, options = {}) {
                         width: ${width};
                         max-width: ${width};
                         margin: 0 auto;
-                        padding: 4mm 3mm;
-                        font-size: 12px;
+                        padding: ${is58mm ? '2mm 1mm' : '4mm 3mm'};
+                        font-size: ${is58mm ? '11px' : '12px'};
                         line-height: 1.35;
                         -webkit-print-color-adjust: exact;
                         print-color-adjust: exact;
@@ -4697,31 +5144,32 @@ function generateReceipt(s) {
             ${s.clienteNombre ? `<p style="margin:0; font-size:11px; font-weight:bold;">Cliente: ${s.clienteNombre}</p>` : ''}
         </div>
         <div style="border-bottom:1px dashed #000; padding-bottom:10px; margin-bottom:10px; font-family: 'Courier New', Courier, monospace; color: black;">
-            ${s.items.map(i => `<div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px;"><span style="flex:1; text-align:left;">${i.qty} ${i.tipo} - ${i.nombre}</span><span>$${(i.qty * i.precio).toFixed(2)}</span></div>`).join('')}
+            ${s.items.map(i => `<div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px;"><span style="flex:1; text-align:left;">${formatQty(i.qty, i.tipo)} ${i.tipo} - ${i.nombre}</span><span>${formatUSD(i.qty * i.precio)}</span></div>`).join('')}
         </div>
         ${s.descuentoUsd > 0 ? `
-            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px; font-family: 'Courier New', monospace;"><span>SUBTOTAL:</span><span>$${(s.totalUsd + s.descuentoUsd).toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px; font-family: 'Courier New', monospace; color: #dc2626;"><span>DESCUENTO:</span><span>-$${s.descuentoUsd.toFixed(2)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px; font-family: 'Courier New', monospace;"><span>SUBTOTAL:</span><span>${formatUSD(s.totalUsd + s.descuentoUsd)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px; font-family: 'Courier New', monospace; color: #dc2626;"><span>DESCUENTO:</span><span>-${formatUSD(s.descuentoUsd)}</span></div>
         ` : ''}
         ${s.saldoFavorAplicadoUsd > 0 ? `
-            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px; font-family: 'Courier New', monospace; color: #059669;"><span>SALDO A FAVOR USADO:</span><span>-$${s.saldoFavorAplicadoUsd.toFixed(2)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-bottom:4px; font-family: 'Courier New', monospace; color: #059669;"><span>SALDO A FAVOR USADO:</span><span>-${formatUSD(s.saldoFavorAplicadoUsd)}</span></div>
         ` : ''}
-        <div style="font-weight:900; display:flex; justify-content:space-between; font-family: 'Courier New', monospace; font-size:16px; color: black;"><span>TOTAL:</span><span>$${s.totalUsd.toFixed(2)}</span></div>
-        ${(s.tasaBCV && s.tasaBCV > 0) ? `
-            <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:bold; font-family: 'Courier New', monospace; color: black; margin-top:2px;"><span>EQUIV. BCV (Tasa ${s.tasaBCV.toFixed(2)}):</span><span>Bs ${(s.totalUsd * s.tasaBCV).toFixed(2)}</span></div>
+        <div style="font-weight:900; display:flex; justify-content:space-between; font-family: 'Courier New', monospace; font-size:16px; color: black;"><span>TOTAL:</span><span>${formatUSD(s.totalUsd)}</span></div>
+        ${((s.tasaBCV || getBcvRate()) > 0) ? `
+            <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:bold; font-family: 'Courier New', monospace; color: black; margin-top:2px;"><span>EQUIV. BCV (Tasa ${formatBs(s.tasaBCV || getBcvRate())}):</span><span>${formatBs(s.totalUsd * (s.tasaBCV || getBcvRate()))}</span></div>
         ` : ''}
         ${s.vuelto && s.vuelto.montoUsd > 0 ? `
-            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-top:4px; font-family: 'Courier New', monospace;"><span>VUELTO (${metodoLabels[s.vuelto.metodo] || 'EFECTIVO'}):</span><span>$${s.vuelto.montoUsd.toFixed(2)} (Bs ${s.vuelto.montoBs.toFixed(2)})</span></div>
+            <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; margin-top:4px; font-family: 'Courier New', monospace;"><span>VUELTO (${metodoLabels[s.vuelto.metodo] || 'EFECTIVO'}):</span><span>${formatUSD(s.vuelto.montoUsd)} (${formatBs(s.vuelto.montoBs)})</span></div>
             ${s.vuelto.metodo === 'saldoFavor' ? '<div style="text-align:center; font-size:10px; font-weight:bold; margin:2px 0; color:#2563eb;">* ACREDITADO A CUENTA DE CLIENTE *</div>' : ''}
         ` : ''}
-        ${s.fiadoUsd > 0 ? `<div style="font-weight:bold; display:flex; justify-content:space-between; font-family: 'Courier New', monospace; font-size:14px; color:#b91c1c;"><span>FIADO:</span><span>$${s.fiadoUsd.toFixed(2)}</span></div>` : ''}
+        ${s.fiadoUsd > 0 ? `<div style="font-weight:bold; display:flex; justify-content:space-between; font-family: 'Courier New', monospace; font-size:14px; color:#b91c1c;"><span>FIADO:</span><span>${formatUSD(s.fiadoUsd)}</span></div>` : ''}
         <div style="text-align:center; margin-top:12px; padding-top:8px; border-top:1px dashed #000;">
             <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&margin=0&data=${encodeURIComponent(`TICKET:${(s.numeroFactura || s.id.slice(-6)).toUpperCase()}|TOTAL:$${s.totalUsd.toFixed(2)}|FECHA:${s.fechaStr}`)}" style="width:85px; height:85px; margin:0 auto; display:block;" alt="QR" />
             <p style="margin:4px 0 0 0; font-size:10px; font-family:'Courier New', monospace;">Escanear para verificar</p>
         </div>
         <div style="text-align:center; margin-top:8px; font-size:12px; font-family: 'Courier New', monospace; font-weight:bold;"><p>¡Gracias por su compra!</p></div>`;
 
-    imprimirTicketAislado(receiptHtml);
+    const is58mmRec = (storeConfig && storeConfig.ticketWidth === '58mm');
+    imprimirTicketAislado(receiptHtml, { width: is58mmRec ? '58mm' : '78mm' });
 }
 
 // =====================================================
@@ -4756,19 +5204,21 @@ async function guardarGasto() {
     const categoria = document.getElementById('gasto-categoria') ? document.getElementById('gasto-categoria').value : 'Otros Gastos';
     const origen = document.getElementById('gasto-origen') ? document.getElementById('gasto-origen').value : 'Gaveta Efectivo USD';
     const concepto = document.getElementById('gasto-concepto').value.trim();
+    const comprobante = document.getElementById('gasto-comprobante')?.value.trim() || '';
     const monto = parseFloat(document.getElementById('gasto-monto').value);
     const moneda = document.getElementById('gasto-moneda').value;
     if (!concepto || isNaN(monto) || monto <= 0) return Swal.fire('Atención', 'Datos inválidos', 'warning');
-    let montoUsd = moneda === 'BS' ? monto / rates.bcv : monto;
+    let montoUsd = moneda === 'BS' ? bsToUsd(monto) : monto;
     try {
         await getDb('gastos').add({
-            concepto, categoria, origen, montoOriginal: monto, moneda, montoUsd, status: 'abierto',
-            cajero: currentUser.email,
-            fechaStr: new Date().toLocaleString(),
+            concepto, categoria, origen, comprobante, montoOriginal: monto, moneda, montoUsd, status: 'abierto',
+            cajero: currentUser?.email || 'cajero',
+            fechaStr: new Date().toLocaleString('es-VE'),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
         closeGastoModal();
-        Swal.fire({ title: 'Registrado', text: `Salida $${montoUsd.toFixed(2)} (${categoria})`, icon: 'success', timer: 1500, showConfirmButton: false });
+        if (document.getElementById('gasto-comprobante')) document.getElementById('gasto-comprobante').value = '';
+        Swal.fire({ title: 'Registrado', text: `Salida ${formatUSD(montoUsd)} (${categoria})`, icon: 'success', timer: 1500, showConfirmButton: false });
     } catch (e) {
         Swal.fire('Error', 'Fallo conexión', 'error');
     }
@@ -4784,7 +5234,7 @@ function verCajaChica() {
     const gastosActivos = gastosHistory.filter(g => g.status === 'abierto' || !g.status);
     gastosActivos.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
     gastosActivos.forEach(g => {
-        const usd = g.montoUsd || (g.moneda === 'BS' ? g.montoOriginal / rates.bcv : g.montoOriginal) || 0;
+        const usd = g.montoUsd || (g.moneda === 'BS' ? bsToUsd(g.montoOriginal) : g.montoOriginal) || 0;
         totalGastosUsd += usd;
         if (tbody) {
             tbody.innerHTML += `
@@ -4793,7 +5243,7 @@ function verCajaChica() {
                     <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">${g.categoria || 'Gasto Menor'}</span></td>
                     <td class="p-3 font-semibold text-slate-800">${g.concepto}</td>
                     <td class="p-3 text-slate-500 text-[11px]">${g.origen || 'Gaveta'}</td>
-                    <td class="p-3 text-right font-black text-rose-600">-$${usd.toFixed(2)}<br><span class="text-[10px] font-normal text-slate-400">Bs ${(usd * rates.bcv).toFixed(2)}</span></td>
+                    <td class="p-3 text-right font-black text-rose-600">-${formatUSD(usd)}<br><span class="text-[10px] font-normal text-slate-400">${formatBsFromUSD(usd)}</span></td>
                     <td class="p-3 text-center admin-only">
                         ${isAdmin ? `<button onclick="eliminarGasto('${g.id}')" class="w-7 h-7 rounded-full bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition-colors"><i class="fa-solid fa-trash text-xs"></i></button>` : ''}
                     </td>
@@ -4805,8 +5255,8 @@ function verCajaChica() {
     }
     const totalUsdEl = document.getElementById('caja-chica-total-usd');
     const totalBsEl = document.getElementById('caja-chica-total-bs');
-    if (totalUsdEl) totalUsdEl.textContent = `-$${totalGastosUsd.toFixed(2)}`;
-    if (totalBsEl) totalBsEl.textContent = `-Bs ${(totalGastosUsd * rates.bcv).toFixed(2)}`;
+    if (totalUsdEl) totalUsdEl.textContent = `-${formatUSD(totalGastosUsd)}`;
+    if (totalBsEl) totalBsEl.textContent = `-${formatBsFromUSD(totalGastosUsd)}`;
     m.classList.remove('hidden');
     setTimeout(() => {
         m.classList.remove('opacity-0');
@@ -4928,12 +5378,12 @@ function renderReports() {
     const utilNetaEfectiva = (ventasContado - (tVentas - tGananciaBruta)) - tGastos - tMermas;
     
     const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    setTxt('rep-total-ventas', `$${tVentas.toFixed(2)}`);
-    setTxt('rep-total-ventas-bs', `Bs ${(tVentas * rates.bcv).toFixed(2)}`);
-    setTxt('rep-ventas-contado', `$${ventasContado.toFixed(2)}`);
-    setTxt('rep-ventas-contado-bs', `Bs ${(ventasContado * rates.bcv).toFixed(2)}`);
-    setTxt('rep-total-ganancia', `$${utilBruta.toFixed(2)}`);
-    setTxt('rep-total-ganancia-bs', `Bs ${(utilBruta * rates.bcv).toFixed(2)}`);
+    setTxt('rep-total-ventas', formatUSD(tVentas));
+    setTxt('rep-total-ventas-bs', formatBsFromUSD(tVentas));
+    setTxt('rep-ventas-contado', formatUSD(ventasContado));
+    setTxt('rep-ventas-contado-bs', formatBsFromUSD(ventasContado));
+    setTxt('rep-total-ganancia', formatUSD(utilBruta));
+    setTxt('rep-total-ganancia-bs', formatBsFromUSD(utilBruta));
     // Aviso honesto: de dónde sale —y de dónde NO— la ganancia mostrada.
     const notaGanancia = document.getElementById('rep-ganancia-nota');
     if (notaGanancia) {
@@ -4945,24 +5395,24 @@ function renderReports() {
             notaGanancia.classList.add('hidden');
         }
     }
-    setTxt('rep-total-gastos', `-$${tGastos.toFixed(2)}`);
-    setTxt('rep-total-gastos-bs', `Bs ${(tGastos * rates.bcv).toFixed(2)}`);
-    setTxt('rep-mermas-usd', `-$${tMermas.toFixed(2)}`);
-    setTxt('rep-mermas-usd-bs', `Bs ${(tMermas * rates.bcv).toFixed(2)}`);
-    setTxt('rep-ganancia-neta', `$${utilNetaEfectiva.toFixed(2)}`);
-    setTxt('rep-ganancia-neta-bs', `Bs ${(utilNetaEfectiva * rates.bcv).toFixed(2)}`);
-    setTxt('rep-fiados', `$${tFiados.toFixed(2)}`);
-    setTxt('rep-fiados-bs', `Bs ${(tFiados * rates.bcv).toFixed(2)}`);
-    setTxt('rep-descuentos', `-$${tDescuentos.toFixed(2)}`);
-    setTxt('rep-descuentos-bs', `Bs ${(tDescuentos * rates.bcv).toFixed(2)}`);
+    setTxt('rep-total-gastos', `-${formatUSD(tGastos)}`);
+    setTxt('rep-total-gastos-bs', `-${formatBsFromUSD(tGastos)}`);
+    setTxt('rep-mermas-usd', `-${formatUSD(tMermas)}`);
+    setTxt('rep-mermas-usd-bs', `-${formatBsFromUSD(tMermas)}`);
+    setTxt('rep-ganancia-neta', formatUSD(utilNetaEfectiva));
+    setTxt('rep-ganancia-neta-bs', formatBsFromUSD(utilNetaEfectiva));
+    setTxt('rep-fiados', formatUSD(tFiados));
+    setTxt('rep-fiados-bs', formatBsFromUSD(tFiados));
+    setTxt('rep-descuentos', `-${formatUSD(tDescuentos)}`);
+    setTxt('rep-descuentos-bs', `-${formatBsFromUSD(tDescuentos)}`);
     const gn = document.getElementById('rep-ganancia-neta');
     if (gn) gn.className = utilNetaEfectiva >= 0 ? "text-2xl font-black text-emerald-400" : "text-2xl font-black text-rose-400";
-    setTxt('caja-efectivo-usd', `$${cajEfectivoUsd.toFixed(2)}`);
-    setTxt('caja-zelle', `$${cajZelle.toFixed(2)}`);
-    setTxt('caja-efectivo-bs', `Bs ${cajEfectivoBs.toFixed(2)}`);
-    setTxt('caja-efectivo-bs-usd', `$${(cajEfectivoBs / rates.bcv).toFixed(2)}`);
-    setTxt('caja-punto', `Bs ${cajPunto.toFixed(2)}`);
-    setTxt('caja-punto-usd', `$${(cajPunto / rates.bcv).toFixed(2)}`);
+    setTxt('caja-efectivo-usd', formatUSD(cajEfectivoUsd));
+    setTxt('caja-zelle', formatUSD(cajZelle));
+    setTxt('caja-efectivo-bs', formatBs(cajEfectivoBs));
+    setTxt('caja-efectivo-bs-usd', formatUSD(bsToUsd(cajEfectivoBs)));
+    setTxt('caja-punto', formatBs(cajPunto));
+    setTxt('caja-punto-usd', formatUSD(bsToUsd(cajPunto)));
     const bc = document.getElementById('saldos-bancarios-container');
     if (bc) {
         bc.innerHTML = '';
@@ -4974,8 +5424,8 @@ function renderReports() {
                     <div class="flex justify-between items-center bg-white border border-slate-100 p-2 rounded-lg mb-1">
                         <span class="text-xs font-bold text-slate-700">${banco}</span>
                         <div class="text-right">
-                            <span class="font-black text-blue-600">Bs ${saldosBancarios[banco].toFixed(2)}</span>
-                            <p class="text-[10px] font-bold text-slate-400">$${(saldosBancarios[banco] / rates.bcv).toFixed(2)}</p>
+                            <span class="font-black text-blue-600">${formatBs(saldosBancarios[banco])}</span>
+                            <p class="text-[10px] font-bold text-slate-400">${formatUSD(bsToUsd(saldosBancarios[banco]))}</p>
                         </div>
                     </div>`;
             }
@@ -5101,7 +5551,7 @@ function abrirModalArqueo30Seg() {
     const content = document.getElementById('arqueo-modal-content');
     if (!modal) return;
 
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     // Calcular montos esperados por el sistema para el turno abierto actual
     let espEfUsd = 0;
@@ -5127,8 +5577,16 @@ function abrirModalArqueo30Seg() {
 
     gastosHistory.forEach(g => {
         tGastosUsd += g.montoUsd || 0;
-        if (g.moneda === 'USD') espEfUsd -= (g.montoOriginal || g.montoUsd || 0);
-        else espEfBs -= (g.montoOriginal || (g.montoUsd * tasa) || 0);
+        const origen = String(g.origen || '').toLowerCase();
+        const montoOrig = parseFloat(g.montoOriginal || g.montoUsd || 0);
+        if (origen.includes('pago móvil') || origen.includes('pago movil') || origen.includes('banco')) {
+            espPMBs -= (g.moneda === 'BS' ? montoOrig : montoOrig * tasa);
+        } else if (origen.includes('efectivo bs')) {
+            espEfBs -= (g.moneda === 'BS' ? montoOrig : montoOrig * tasa);
+        } else {
+            // Por defecto: Gaveta Efectivo USD
+            espEfUsd -= (g.moneda === 'USD' ? montoOrig : (tasa > 0 ? montoOrig / tasa : 0));
+        }
     });
 
     abonosHistory.forEach(a => {
@@ -5228,7 +5686,7 @@ function sumarDesgloseBilletes() {
 }
 
 function calcularDiferenciasArqueo() {
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     const fisUsd = parseFloat(document.getElementById('arq-fis-usd')?.value) || 0;
     const fisBs = parseFloat(document.getElementById('arq-fis-bs')?.value) || 0;
@@ -5284,7 +5742,7 @@ function calcularDiferenciasArqueo() {
 }
 
 function imprimirArqueoCorteZ() {
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const fisUsd = parseFloat(document.getElementById('arq-fis-usd')?.value) || 0;
     const fisBs = parseFloat(document.getElementById('arq-fis-bs')?.value) || 0;
     const fisPunto = parseFloat(document.getElementById('arq-fis-punto')?.value) || 0;
@@ -5301,41 +5759,47 @@ function imprimirArqueoCorteZ() {
         logoHtml = `<div style="text-align:center; margin-bottom: 5px;"><img src="${storeConfig.logo}" style="max-height: 50px; width: auto; filter: grayscale(100%);"></div>`;
     }
 
+    const is58mm = (storeConfig && storeConfig.ticketWidth === '58mm');
+    const ticketW = is58mm ? '58mm' : '80mm';
+    const containerStyle = is58mm
+        ? "width: 100%; max-width: 58mm; margin: 0 auto; font-family: monospace; font-size: 10px; line-height: 1.3;"
+        : "width: 100%; max-width: 300px; margin: 0 auto; font-family: monospace; font-size: 11px; line-height: 1.4;";
+
     const corteZHtml = `
-        <div style="width: 100%; max-width: 300px; margin: 0 auto; font-family: monospace; font-size: 11px; line-height: 1.4;">
+        <div style="${containerStyle}">
             ${logoHtml}
-            <h2 style="text-align:center; font-size:15px; font-weight:bold; margin-bottom: 2px;">${storeConfig.name.toUpperCase()}</h2>
-            ${storeConfig.rif ? `<p style="text-align:center; font-size:10px; margin-bottom: 3px;">RIF: ${storeConfig.rif}</p>` : ''}
-            <h3 style="text-align:center; font-size:13px; font-weight:bold; border-top: 1px dashed #000; padding-top: 4px; margin-bottom: 2px;">ARQUEO DE CAJA DIARIO (CORTE Z)</h3>
-            <p style="text-align:center; border-bottom: 1px dashed #000; padding-bottom:4px; margin-bottom: 8px;">${fecha}<br>Cajero: ${currentUser?.email || 'Principal'}<br>Tasa BCV: Bs ${tasa.toFixed(2)}</p>
+            <h2 style="text-align:center; font-size:${is58mm ? '13px' : '15px'}; font-weight:bold; margin-bottom: 2px;">${storeConfig.name.toUpperCase()}</h2>
+            ${storeConfig.rif ? `<p style="text-align:center; font-size:9px; margin-bottom: 3px;">RIF: ${storeConfig.rif}</p>` : ''}
+            <h3 style="text-align:center; font-size:${is58mm ? '11px' : '13px'}; font-weight:bold; border-top: 1px dashed #000; padding-top: 4px; margin-bottom: 2px;">ARQUEO DE CAJA DIARIO (CORTE Z)</h3>
+            <p style="text-align:center; border-bottom: 1px dashed #000; padding-bottom:4px; margin-bottom: 8px;">${fecha}<br>Cajero: ${currentUser?.email || 'Principal'}<br>Tasa BCV: ${formatBs(tasa)}</p>
 
             <h4 style="font-weight:bold; margin: 4px 0;">1. SISTEMA ESPERA:</h4>
-            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>$${arqueoEsperado.efectivoUsd.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>Bs ${arqueoEsperado.efectivoBs.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>Bs ${arqueoEsperado.puntoBs.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>Bs ${arqueoEsperado.pagoMovilBs.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>$${arqueoEsperado.zelleUsd.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL ESPERADO:</span><span>$${arqueoEsperado.totalUsd.toFixed(2)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>${formatUSD(arqueoEsperado.efectivoUsd)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>${formatBs(arqueoEsperado.efectivoBs)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>${formatBs(arqueoEsperado.puntoBs)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>${formatBs(arqueoEsperado.pagoMovilBs)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>${formatUSD(arqueoEsperado.zelleUsd)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL ESPERADO:</span><span>${formatUSD(arqueoEsperado.totalUsd)}</span></div>
 
             <h4 style="font-weight:bold; margin: 8px 0 4px 0; border-top: 1px dashed #000; padding-top: 4px;">2. CONTEO FÍSICO REAL:</h4>
-            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>$${fisUsd.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>Bs ${fisBs.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>Bs ${fisPunto.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>Bs ${fisPM.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>$${fisZelle.toFixed(2)}</span></div>
-            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL FÍSICO:</span><span>$${totalFisUsd.toFixed(2)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>${formatUSD(fisUsd)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>${formatBs(fisBs)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>${formatBs(fisPunto)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>${formatBs(fisPM)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>${formatUSD(fisZelle)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL FÍSICO:</span><span>${formatUSD(totalFisUsd)}</span></div>
 
             <div style="border: 1px solid #000; padding: 4px; margin: 8px 0; text-align:center;">
-                <p style="font-weight:bold; font-size:12px;">DIFERENCIA: ${difUsd >= 0 ? '+' : ''}$${difUsd.toFixed(2)} (Bs ${(difUsd * tasa).toFixed(2)})</p>
+                <p style="font-weight:bold; font-size:12px;">DIFERENCIA: ${difUsd >= 0 ? '+' : ''}${formatUSD(difUsd)} (${formatBs(difUsd * tasa)})</p>
                 <p style="font-size:10px;">${Math.abs(difUsd) < 0.05 ? 'CUADRE EXACTO' : (difUsd > 0 ? 'SOBRANTE' : 'FALTANTE')}</p>
             </div>
 
             ${obs ? `<p style="font-size:10px; margin-bottom: 5px;"><b>Obs:</b> ${obs}</p>` : ''}
 
             <div style="border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px;">
-                <div style="display:flex; justify-content:space-between;"><span>Ventas del Turno:</span><span>$${arqueoEsperado.ventasTotalUsd.toFixed(2)}</span></div>
-                <div style="display:flex; justify-content:space-between;"><span>Gastos del Turno:</span><span>-$${arqueoEsperado.gastosUsd.toFixed(2)}</span></div>
-                <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>Ganancia Neta:</span><span>$${arqueoEsperado.gananciaNetaUsd.toFixed(2)}</span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Ventas del Turno:</span><span>${formatUSD(arqueoEsperado.ventasTotalUsd)}</span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Gastos del Turno:</span><span>-${formatUSD(arqueoEsperado.gastosUsd)}</span></div>
+                <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>Ganancia Neta:</span><span>${formatUSD(arqueoEsperado.gananciaNetaUsd)}</span></div>
             </div>
 
             <br><br>
@@ -5343,7 +5807,7 @@ function imprimirArqueoCorteZ() {
         </div>
     `;
 
-    imprimirTicketAislado(corteZHtml, { width: '80mm' });
+    imprimirTicketAislado(corteZHtml, { width: ticketW });
 }
 
 function imprimirCorteZ() {
@@ -5351,7 +5815,7 @@ function imprimirCorteZ() {
 }
 
 function enviarArqueoWhatsApp() {
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const fisUsd = parseFloat(document.getElementById('arq-fis-usd')?.value) || 0;
     const fisBs = parseFloat(document.getElementById('arq-fis-bs')?.value) || 0;
     const fisPunto = parseFloat(document.getElementById('arq-fis-punto')?.value) || 0;
@@ -5389,7 +5853,8 @@ function enviarArqueoWhatsApp() {
     msg += `--------------------------------\n`;
     msg += `✅ *Cierre auditado desde GestiónPro POS*`;
 
-    const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    const cleanPhone = storeConfig.phone ? normalizarTelefono(storeConfig.phone).replace(/\D/g, '') : '';
+    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
 }
 
@@ -5398,7 +5863,19 @@ function enviarCierreWhatsApp() {
 }
 
 async function confirmarCierreArqueo() {
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const confirmResult = await Swal.fire({
+        title: '¿Confirmar Cierre de Turno?',
+        text: 'Se asentará el Arqueo Z y se registrará el corte de caja definitivo.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#4f46e5',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, asentar cierre',
+        cancelButtonText: 'Revisar montos'
+    });
+    if (!confirmResult.isConfirmed) return;
+
+    const tasa = getBcvRate();
     const fisUsd = parseFloat(document.getElementById('arq-fis-usd')?.value) || 0;
     const fisBs = parseFloat(document.getElementById('arq-fis-bs')?.value) || 0;
     const fisPunto = parseFloat(document.getElementById('arq-fis-punto')?.value) || 0;
@@ -5515,36 +5992,113 @@ async function confirmarCierreArqueo() {
     }
 }
 
+let _cierresHistoricosCache = [];
+
 function verHistorialCierres() {
     if (!isAdmin) return;
     const m = document.getElementById('cierres-modal');
     const c = document.getElementById('cierres-modal-content');
     const tbody = document.getElementById('cierres-table-body');
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500 font-bold">Cargando auditoría de cierres...</td></tr>';
     m.classList.remove('hidden');
     setTimeout(() => {
         m.classList.remove('opacity-0');
         c.classList.remove('scale-95');
     }, 10);
-    getDb('cierres').orderBy('timestamp', 'desc').limit(30).get().then(snapshot => {
+    getDb('cierres').orderBy('timestamp', 'desc').limit(40).get().then(snapshot => {
         tbody.innerHTML = '';
+        _cierresHistoricosCache = [];
         if (snapshot.empty) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500">Sin cierres</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500">No hay cierres registrados en el historial.</td></tr>';
             return;
         }
         snapshot.forEach(doc => {
-            const d = doc.data();
+            const d = { id: doc.id, ...doc.data() };
+            _cierresHistoricosCache.push(d);
+            const dif = Number(d.diferenciaUsd || 0);
+            let badgeCuadre = '<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">Exacto</span>';
+            if (dif > 0.05) {
+                badgeCuadre = `<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 dark:bg-teal-950/70 dark:text-teal-300">+${formatUSD(dif)}</span>`;
+            } else if (dif < -0.05) {
+                badgeCuadre = `<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300">${formatUSD(dif)}</span>`;
+            }
             tbody.innerHTML += `
-                <tr class="hover:bg-slate-50 border-b border-slate-100">
-                    <td class="py-3 font-bold text-slate-700">${d.fechaStr}</td>
-                    <td class="py-3 text-slate-500">${d.cajero}</td>
-                    <td class="py-3 font-black text-emerald-600 text-right">$${(d.ventasTotalesUsd || 0).toFixed(2)}</td>
-                    <td class="py-3 font-black text-blue-600 text-right">$${(d.gananciaNetaUsd || 0).toFixed(2)}</td>
-                    <td class="py-3 text-center"><span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">Cerrado</span></td>
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                    <td class="py-3 font-bold text-slate-700 dark:text-slate-200 text-xs">${d.fechaStr || 'Sin fecha'}</td>
+                    <td class="py-3 text-slate-600 dark:text-slate-400 text-xs">
+                        <span class="font-extrabold text-slate-800 dark:text-slate-100 block">${d.sucursalNombre || 'Principal'}</span>
+                        <span class="text-[10px] text-slate-400">${d.cajero}</span>
+                    </td>
+                    <td class="py-3 font-black text-emerald-600 dark:text-emerald-400 text-right tabular-nums text-xs">${formatUSD(d.ventasTotalesUsd || 0)}</td>
+                    <td class="py-3 text-right tabular-nums text-xs">${badgeCuadre}</td>
+                    <td class="py-3 text-center">
+                        <button type="button" onclick="reimprimirCorteZHistorico('${doc.id}')" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-black border border-indigo-200 dark:border-indigo-800 shadow-2xs transition-all active:scale-95" title="Reimprimir Ticket Térmico de Corte Z">
+                            <i class="fa-solid fa-receipt mr-1"></i> Ticket Z
+                        </button>
+                    </td>
                 </tr>`;
         });
+    }).catch(err => {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-rose-500 font-bold">Error al cargar historial: ${err.message}</td></tr>`;
     });
 }
+
+function reimprimirCorteZHistorico(cierreId) {
+    const c = _cierresHistoricosCache.find(x => x.id === cierreId);
+    if (!c) return Swal.fire('Error', 'No se encontraron los datos del cierre', 'error');
+
+    const is58mm = (storeConfig && storeConfig.ticketWidth === '58mm');
+    const ticketW = is58mm ? '58mm' : '80mm';
+    const containerStyle = is58mm
+        ? "width: 100%; max-width: 58mm; margin: 0 auto; font-family: monospace; font-size: 10px; line-height: 1.3;"
+        : "width: 100%; max-width: 300px; margin: 0 auto; font-family: monospace; font-size: 11px; line-height: 1.4;";
+
+    const difUsd = Number(c.diferenciaUsd || 0);
+    const esp = c.esperado || {};
+    const fis = c.fisico || {};
+
+    const corteZHtml = `
+        <div style="${containerStyle}">
+            <h2 style="text-align:center; font-size:${is58mm ? '13px' : '15px'}; font-weight:bold; margin-bottom: 2px;">${(storeConfig.name || 'GestiónPro').toUpperCase()}</h2>
+            <h3 style="text-align:center; font-size:${is58mm ? '11px' : '13px'}; font-weight:bold; border-top: 1px dashed #000; padding-top: 4px; margin-bottom: 2px;">COPIA AUDITADA CORTE Z</h3>
+            <p style="text-align:center; border-bottom: 1px dashed #000; padding-bottom:4px; margin-bottom: 8px;">${c.fechaStr}<br>Sucursal: ${c.sucursalNombre || 'Principal'}<br>Cajero: ${c.cajero}<br>Tasa: ${formatBs(c.tasaBCV || getBcvRate())}</p>
+
+            <h4 style="font-weight:bold; margin: 4px 0;">1. SISTEMA ESPERABA:</h4>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>${formatUSD(esp.efectivoUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>${formatBs(esp.efectivoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>${formatBs(esp.puntoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>${formatBs(esp.pagoMovilBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>${formatUSD(esp.zelleUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL ESPERADO:</span><span>${formatUSD(esp.totalUsd || c.ventasTotalesUsd || 0)}</span></div>
+
+            <h4 style="font-weight:bold; margin: 8px 0 4px 0; border-top: 1px dashed #000; padding-top: 4px;">2. CONTEO FÍSICO ASENTADO:</h4>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>${formatUSD(fis.efectivoUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>${formatBs(fis.efectivoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>${formatBs(fis.puntoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>${formatBs(fis.pagoMovilBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>${formatUSD(fis.zelleUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL FÍSICO:</span><span>${formatUSD(fis.totalUsd || 0)}</span></div>
+
+            <div style="border: 1px solid #000; padding: 4px; margin: 8px 0; text-align:center;">
+                <p style="font-weight:bold; font-size:12px;">DIFERENCIA: ${difUsd >= 0 ? '+' : ''}${formatUSD(difUsd)}</p>
+                <p style="font-size:10px;">${Math.abs(difUsd) < 0.05 ? 'CUADRE EXACTO' : (difUsd > 0 ? 'SOBRANTE' : 'FALTANTE')}</p>
+            </div>
+
+            ${c.observaciones ? `<p style="font-size:10px; margin-bottom: 5px;"><b>Obs:</b> ${c.observaciones}</p>` : ''}
+
+            <div style="border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px;">
+                <div style="display:flex; justify-content:space-between;"><span>Ventas Brutas:</span><span>${formatUSD(c.ventasTotalesUsd || 0)}</span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Gastos Turno:</span><span>-${formatUSD(c.totalGastosUsd || 0)}</span></div>
+                <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>Ganancia Neta:</span><span>${formatUSD(c.gananciaNetaUsd || 0)}</span></div>
+            </div>
+            <br>
+            <p style="text-align:center; font-size:9px;">[COPIA REIMPRESA - GESTIÓNPRO]</p>
+        </div>
+    `;
+
+    imprimirTicketAislado(corteZHtml, { width: ticketW });
+}
+window.reimprimirCorteZHistorico = reimprimirCorteZHistorico;
 
 function closeCierresModal() {
     const m = document.getElementById('cierres-modal');
@@ -5608,13 +6162,28 @@ function calcularMerma() {
 
 function guardarMerma() {
     if (!activeMermaCalc) return;
-    const b = db.batch();
-    b.update(getDb('products').doc(activeMermaCalc.idProd), { stock: firebase.firestore.FieldValue.increment(-activeMermaCalc.mermaKg) });
-    b.set(getDb('mermas').doc(), { ...activeMermaCalc, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
-    b.commit().then(() => {
-        document.getElementById('merma-resultado').classList.add('hidden');
-        activeMermaCalc = null;
-        Swal.fire('OK', '', 'success');
+    Swal.fire({
+        title: '¿Confirmar registro de merma?',
+        text: `Se descontarán ${activeMermaCalc.mermaKg.toFixed(3)} Kg de ${activeMermaCalc.nombre} (Pérdida estimada: $${activeMermaCalc.costoPerdida.toFixed(2)}).`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Sí, registrar merma',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const b = db.batch();
+            b.update(getDb('products').doc(activeMermaCalc.idProd), { stock: firebase.firestore.FieldValue.increment(-activeMermaCalc.mermaKg) });
+            b.set(getDb('mermas').doc(), { ...activeMermaCalc, timestamp: firebase.firestore.FieldValue.serverTimestamp() });
+            b.commit().then(() => {
+                document.getElementById('merma-resultado').classList.add('hidden');
+                activeMermaCalc = null;
+                Swal.fire('Registrado', 'Merma asentada en el inventario', 'success');
+            }).catch(e => {
+                Swal.fire('Error', 'No se pudo guardar la merma: ' + e.message, 'error');
+            });
+        }
     });
 }
 
@@ -5913,8 +6482,9 @@ function deleteSale(id) {
     });
 }
 
-function exportToExcel() {
-    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no cargada', 'error');
+async function exportToExcel() {
+    try { await ensureXLSX(); } catch(e) {}
+    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no disponible', 'error');
     if (!products || products.length === 0) return Swal.fire('Sin datos', 'No hay productos', 'info');
     const wsData = [
         ['REPORTE INVENTARIO - ' + (storeConfig.name || 'GESTIÓNPRO').toUpperCase()],
@@ -6031,8 +6601,9 @@ function handleExcelFileSelect(e) {
     }
 }
 
-function descargarPlantillaExcel() {
-    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no cargada', 'error');
+async function descargarPlantillaExcel() {
+    try { await ensureXLSX(); } catch(e) {}
+    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no disponible', 'error');
     const plantilla = [
         ['Código', 'Producto', 'Categoría', 'Marca', 'Tipo', 'Stock', 'Costo ($)', 'Precio ($)', 'Vencimiento'],
         ['759100100001', 'Harina PAN Blanca 1kg', 'Víveres', 'PAN', 'unid', 50, 1.15, 1.45, '2026-12-31'],
@@ -6235,14 +6806,17 @@ function parsearFilasExcel(rawRows) {
     return parsed;
 }
 
-function handleExcelFile(file) {
+async function handleExcelFile(file) {
     if (!file) return;
     const ext = file.name.split('.').pop().toLowerCase();
     if (!['xlsx', 'xls', 'csv'].includes(ext)) {
         return Swal.fire('Formato no soportado', 'Por favor selecciona un archivo .xlsx, .xls o .csv', 'warning');
     }
     if (typeof XLSX === 'undefined') {
-        return Swal.fire('Error', 'La librería SheetJS (XLSX) aún no está cargada.', 'error');
+        try { await ensureXLSX(); } catch(e) {}
+    }
+    if (typeof XLSX === 'undefined') {
+        return Swal.fire('Error', 'La librería SheetJS (XLSX) no está disponible.', 'error');
     }
 
     const reader = new FileReader();
@@ -6700,7 +7274,7 @@ function filtrarCuadernoFiados() {
  * Renderiza el Cuaderno Digital de Fiados con KPIs, tarjetas interactivas y estados
  */
 function renderCuadernoFiados(searchQuery = '', filtro = currentFiltroFiados) {
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
 
     // 1. Cálculo de KPIs globales de la calle
     const totalDeudaUsd = (clientes || []).reduce((acc, c) => acc + (c.deudaUsd || 0), 0);
@@ -6710,22 +7284,22 @@ function renderCuadernoFiados(searchQuery = '', filtro = currentFiltroFiados) {
     const promedioDeuda = deudoresActivos > 0 ? totalDeudaUsd / deudoresActivos : 0;
 
     const elTotalUsd = document.getElementById('fiados-total-usd') || document.getElementById('kpi-fiados-total-usd');
-    if (elTotalUsd) elTotalUsd.textContent = `$${totalDeudaUsd.toFixed(2)}`;
+    if (elTotalUsd) elTotalUsd.textContent = formatUSD(totalDeudaUsd);
 
     const elTotalBs = document.getElementById('fiados-total-bs') || document.getElementById('kpi-fiados-total-bs');
-    if (elTotalBs) elTotalBs.textContent = `Bs ${totalDeudaBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (elTotalBs) elTotalBs.textContent = formatBs(totalDeudaBs);
 
     const elCount = document.getElementById('fiados-count-deudores') || document.getElementById('kpi-fiados-cant-deudores');
     if (elCount) elCount.textContent = `${deudoresActivos}`;
 
     const elPromedio = document.getElementById('fiados-promedio-deuda');
-    if (elPromedio) elPromedio.textContent = `Promedio: $${promedioDeuda.toFixed(2)}`;
+    if (elPromedio) elPromedio.textContent = `Promedio: ${formatUSD(promedioDeuda)}`;
 
     const elFavor = document.getElementById('fiados-total-saldofavor') || document.getElementById('kpi-fiados-saldo-favor');
-    if (elFavor) elFavor.textContent = `$${totalSaldoFavor.toFixed(2)}`;
+    if (elFavor) elFavor.textContent = formatUSD(totalSaldoFavor);
 
     const elTasa = document.getElementById('fiados-tasa-bcv') || document.getElementById('kpi-fiados-tasa-bcv');
-    if (elTasa) elTasa.textContent = `Bs ${tasa.toFixed(2)}`;
+    if (elTasa) elTasa.textContent = formatBs(tasa);
 
     // 2. Filtrado de clientes para la vista de tarjetas
     let lista = [...(clientes || [])];
@@ -6804,19 +7378,19 @@ function renderCuadernoFiados(searchQuery = '', filtro = currentFiltroFiados) {
                             ${tieneDeuda ? 'Deuda Pendiente' : 'Al Día'}
                         </span>
                         <span class="font-black text-base tabular-nums ${tieneDeuda ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}">
-                            $${deuda.toFixed(2)}
+                            ${formatUSD(deuda)}
                         </span>
                     </div>
                     <div class="flex justify-between items-center text-[11px]">
                         <span class="text-slate-400">Equivalente BCV:</span>
                         <span class="font-bold tabular-nums ${tieneDeuda ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400'}">
-                            Bs ${deudaBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ${formatBs(deudaBs)}
                         </span>
                     </div>
                     ${saldoFavor > 0 ? `
                     <div class="mt-2 pt-2 border-t border-rose-100/80 dark:border-rose-900/40 flex justify-between items-center text-[11px]">
                         <span class="text-emerald-600 dark:text-emerald-400 font-bold"><i class="fa-solid fa-gift"></i> Saldo a Favor:</span>
-                        <span class="font-black text-emerald-600 dark:text-emerald-400">+$${saldoFavor.toFixed(2)}</span>
+                        <span class="font-black text-emerald-600 dark:text-emerald-400">+${formatUSD(saldoFavor)}</span>
                     </div>` : ''}
                 </div>
             </div>
@@ -6861,7 +7435,7 @@ function openModalCobroWhatsApp(clienteId) {
     if (!c) return Swal.fire('Error', 'Cliente no encontrado', 'error');
 
     currentCobroClienteId = clienteId;
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const deudaUsd = c.deudaUsd || 0;
     const deudaBs = deudaUsd * tasa;
 
@@ -6939,26 +7513,26 @@ function setCobroTemplate(tplKey) {
  */
 function generarTextoCobro(c, tplKey) {
     const storeName = (storeConfig && storeConfig.name) ? storeConfig.name : 'Nuestra Tienda';
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const deuda = (c.deudaUsd || 0);
     const deudaBs = (deuda * tasa).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const primerNombre = (c.nombre || 'Cliente').split(' ').filter(Boolean)[0] || 'Cliente';
 
     if (tplKey === 'amable') {
-        return `Hola ${primerNombre}, ¡espero que estés muy bien! Te saludamos de *${storeName}* 😊.\n\nTe escribimos con mucho gusto para recordarte tu saldo pendiente de fiado:\n💵 *${deuda.toFixed(2)} USD* (equivale a *Bs ${deudaBs}* a la tasa oficial BCV de hoy Bs ${tasa.toFixed(2)}).\n\nSi deseas pasar a abonar en el negocio o transferir por Pago Móvil, estamos a tu completa disposición. ¡Muchas gracias por tu preferencia y feliz día! ✨`;
+        return `Hola ${primerNombre}, ¡espero que estés muy bien! Te saludamos de *${storeName}* 😊.\n\nTe escribimos con mucho gusto para recordarte tu saldo pendiente de fiado:\n💵 *${formatUSD(deuda)}* (equivale a *${formatBs(deuda * tasa)}* a la tasa oficial BCV de hoy ${formatBs(tasa)}).\n\nSi deseas pasar a abonar en el negocio o transferir por Pago Móvil, estamos a tu completa disposición. ¡Muchas gracias por tu preferencia y feliz día! ✨`;
     } else if (tplKey === 'quincena') {
-        return `Estimado(a) ${c.nombre}, un cordial saludo de parte del equipo de *${storeName}* 📋.\n\nAprovechamos estas fechas para recordarte tu saldo en cuenta:\n💰 Saldo pendiente: *$${deuda.toFixed(2)} USD* / *Bs ${deudaBs}* (Tasa BCV: ${tasa.toFixed(2)}).\n\nAgradecemos mucho tu puntualidad para que podamos seguir brindándote el mejor servicio y crédito de confianza. ¡Que tengas una excelente jornada! 🤝`;
+        return `Estimado(a) ${c.nombre}, un cordial saludo de parte del equipo de *${storeName}* 📋.\n\nAprovechamos estas fechas para recordarte tu saldo en cuenta:\n💰 Saldo pendiente: *${formatUSD(deuda)}* / *${formatBs(deuda * tasa)}* (Tasa BCV: ${formatBs(tasa)}).\n\nAgradecemos mucho tu puntualidad para que podamos seguir brindándote el mejor servicio y crédito de confianza. ¡Que tengas una excelente jornada! 🤝`;
     } else {
         // 'detallado'
         let texto = `🧾 *ESTADO DE CUENTA - ${storeName.toUpperCase()}*\n`;
         texto += `━━━━━━━━━━━━━━━━━━━━━\n`;
         texto += `👤 Cliente: *${c.nombre}*\n`;
         if (c.cedula) texto += `🆔 Cédula: ${c.cedula}\n`;
-        texto += `💰 Saldo Pendiente: *$${deuda.toFixed(2)} USD*\n`;
-        texto += `🇻🇪 Total en Bolívares: *Bs ${deudaBs}*\n`;
-        texto += `📊 Tasa Oficial BCV: Bs ${tasa.toFixed(2)}\n`;
+        texto += `💰 Saldo Pendiente: *${formatUSD(deuda)}*\n`;
+        texto += `🇻🇪 Total en Bolívares: *${formatBs(deuda * tasa)}*\n`;
+        texto += `📊 Tasa Oficial BCV: ${formatBs(tasa)}\n`;
         if ((c.saldoFavorUsd || 0) > 0) {
-            texto += `🎁 Saldo a Favor: +$${c.saldoFavorUsd.toFixed(2)}\n`;
+            texto += `🎁 Saldo a Favor: +${formatUSD(c.saldoFavorUsd)}\n`;
         }
         texto += `━━━━━━━━━━━━━━━━━━━━━\n`;
         texto += `💳 *Métodos de Pago Aceptados:*\n`;
@@ -7018,7 +7592,7 @@ function enviarListaCobroWhatsApp() {
         return Swal.fire('¡Excelente!', 'No hay clientes con deuda pendiente en la calle.', 'info');
     }
     const storeName = (storeConfig && storeConfig.name) ? storeConfig.name : 'Nuestra Tienda';
-    const tasa = (rates && rates.bcv > 0) ? rates.bcv : 36.5;
+    const tasa = getBcvRate();
     const totalUsd = deudores.reduce((acc, c) => acc + (c.deudaUsd || 0), 0);
     const totalBs = totalUsd * tasa;
 
@@ -7026,17 +7600,17 @@ function enviarListaCobroWhatsApp() {
 
     let msg = `📋 *REPORTE DE FIADOS EN LA CALLE - ${storeName.toUpperCase()}*\n`;
     msg += `📅 Fecha: ${new Date().toLocaleDateString('es-VE')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
-    msg += `📊 Tasa BCV: Bs ${tasa.toFixed(2)}\n`;
+    msg += `📊 Tasa BCV: ${formatBs(tasa)}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    msg += `💵 *TOTAL POR COBRAR:* *$${totalUsd.toFixed(2)} USD*\n`;
-    msg += `🇻🇪 *TOTAL EN BOLÍVARES:* *Bs ${totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*\n`;
+    msg += `💵 *TOTAL POR COBRAR:* *${formatUSD(totalUsd)}*\n`;
+    msg += `🇻🇪 *TOTAL EN BOLÍVARES:* *${formatBs(totalBs)}*\n`;
     msg += `👥 Clientes con deuda: *${deudores.length}*\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
     msg += `*DETALLE DE CLIENTES:*\n`;
 
     deudores.forEach((c, idx) => {
         const bs = ((c.deudaUsd || 0) * tasa).toFixed(2);
-        msg += `${idx + 1}. *${c.nombre}*: $${(c.deudaUsd || 0).toFixed(2)} (Bs ${bs})`;
+        msg += `${idx + 1}. *${c.nombre}*: ${formatUSD(c.deudaUsd || 0)} (${formatBs((c.deudaUsd || 0) * tasa)})`;
         if (c.telefono) msg += ` • Tlf: ${c.telefono}`;
         msg += `\n`;
     });
@@ -7124,8 +7698,8 @@ function verHistorialComprasCliente(clienteId) {
                         </div>
                     </div>
                     <div class="text-right shrink-0">
-                        <span class="font-black text-sm text-slate-800 dark:text-slate-100">$${item.totalUsd.toFixed(2)}</span>
-                        ${tieneFiado ? `<div class="text-[11px] font-bold text-rose-500">Quedó debiendo: $${item.fiadoUsd.toFixed(2)}</div>` : ''}
+                        <span class="font-black text-sm text-slate-800 dark:text-slate-100">${formatUSD(item.totalUsd)}</span>
+                        ${tieneFiado ? `<div class="text-[11px] font-bold text-rose-500">Quedó debiendo: ${formatUSD(item.fiadoUsd)} (${formatBsFromUSD(item.fiadoUsd)})</div>` : ''}
                     </div>
                 </div>`;
             } else {
@@ -7144,7 +7718,7 @@ function verHistorialComprasCliente(clienteId) {
                         </div>
                     </div>
                     <div class="text-right shrink-0">
-                        <span class="font-black text-sm text-emerald-600 dark:text-emerald-400">+$${item.montoUsd.toFixed(2)}</span>
+                        <span class="font-black text-sm text-emerald-600 dark:text-emerald-400">+${formatUSD(item.montoUsd)}</span>
                     </div>
                 </div>`;
             }
@@ -7212,8 +7786,8 @@ function renderClientes() {
                 </td>
                 <td class="p-4 text-slate-600 text-xs">${c.telefono || 'N/A'}</td>
                 <td class="p-4 text-center">${nivelInfo.badge}</td>
-                <td class="p-4 text-right font-black ${tieneDeuda ? 'text-rose-500' : 'text-slate-400 text-xs'}">$${(c.deudaUsd || 0).toFixed(2)}</td>
-                <td class="p-4 text-right font-black ${saldoFavor > 0 ? 'text-emerald-600' : 'text-slate-400 text-xs'}">${saldoFavor > 0 ? `+$${saldoFavor.toFixed(2)}` : '$0.00'}</td>
+                <td class="p-4 text-right font-black ${tieneDeuda ? 'text-rose-500' : 'text-slate-400 text-xs'}">${formatUSD(c.deudaUsd || 0)}</td>
+                <td class="p-4 text-right font-black ${saldoFavor > 0 ? 'text-emerald-600' : 'text-slate-400 text-xs'}">${saldoFavor > 0 ? `+${formatUSD(saldoFavor)}` : formatUSD(0)}</td>
                 <td class="p-4 text-center">
                     <button onclick="openAbonoModal('${c.id}')" class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1 rounded-lg font-bold text-xs mr-2 shadow-xs"><i class="fa-solid fa-hand-holding-dollar"></i> Abonar</button>
                     ${tieneDeuda && c.telefono ? `<button onclick="openModalCobroWhatsApp('${c.id}')" class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white mx-1" title="Cobrar por WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>` : ''}
@@ -7355,7 +7929,7 @@ async function procesarAbono() {
             cajero: currentUser.email, status: 'abierto',
             fechaStr: new Date().toLocaleString(),
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-            tasaBCV: rates.bcv
+            tasaBCV: getBcvRate()
         });
         await batch.commit();
         closeAbonoModal();
@@ -7417,6 +7991,9 @@ function openSettingsModal() {
     if (!isAdmin) return;
     document.getElementById('settings-name').value = storeConfig.name === 'GestiónPro' ? '' : storeConfig.name;
     document.getElementById('settings-rif').value = storeConfig.rif || '';
+    if (document.getElementById('settings-ticket-width')) {
+        document.getElementById('settings-ticket-width').value = storeConfig.ticketWidth || '80mm';
+    }
     if (document.getElementById('settings-phone')) document.getElementById('settings-phone').value = normalizarTelefono(storeConfig.phone);
     if (document.getElementById('settings-nro-factura')) document.getElementById('settings-nro-factura').value = storeConfig.nroFactura || 1001;
     if (document.getElementById('settings-nro-control')) document.getElementById('settings-nro-control').value = storeConfig.nroControl || '00-001001';
@@ -7457,6 +8034,7 @@ function previewLogo(input) {
 async function saveSettings() {
     const name = document.getElementById('settings-name').value.trim();
     const rif = document.getElementById('settings-rif').value.trim();
+    const ticketWidth = document.getElementById('settings-ticket-width')?.value || '80mm';
     const phone = normalizarTelefono(document.getElementById('settings-phone')?.value || '');
     const nroFactura = parseInt(document.getElementById('settings-nro-factura')?.value || 1001);
     const nroControl = document.getElementById('settings-nro-control')?.value.trim() || '00-001001';
@@ -7469,6 +8047,8 @@ async function saveSettings() {
         const payload = { nroFactura, nroControl };
         if (name) payload.storeName = name; else payload.storeName = firebase.firestore.FieldValue.delete();
         if (rif) payload.storeRif = rif; else payload.storeRif = firebase.firestore.FieldValue.delete();
+        payload.ticketWidth = ticketWidth;
+        storeConfig.ticketWidth = ticketWidth;
         if (phone) payload.storePhone = phone; else payload.storePhone = firebase.firestore.FieldValue.delete();
         if (logoData) payload.storeLogo = logoData; else payload.storeLogo = firebase.firestore.FieldValue.delete();
         await getDb('settings').doc('general').set(payload, { merge: true });
@@ -8259,7 +8839,7 @@ function renderLibroVentas() {
             if (!isNaN(parsed.getTime())) fecha = parsed;
         }
         if (fecha.getMonth() === mes && fecha.getFullYear() === anio) {
-            const tasa = s.tasaBCV || rates.bcv || 36.5;
+            const tasa = s.tasaBCV || getBcvRate();
             const montoTotalUsd = parseFloat(s.totalUsd || s.total || 0);
             const montoTotalBs = montoTotalUsd * tasa;
             let exentoBs = 0, gravadoBs = 0;
@@ -8296,11 +8876,11 @@ function renderLibroVentas() {
         }
     });
     const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    setTxt('libro-total-ventas', `Bs ${totalFacturadoBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    setTxt('libro-total-usd', `$${totalFacturadoUsd.toFixed(2)} USD`);
-    setTxt('libro-total-exento', `Bs ${totalExentoBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    setTxt('libro-total-base', `Bs ${totalBaseBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    setTxt('libro-total-iva', `Bs ${totalIvaBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    setTxt('libro-total-ventas', formatBs(totalFacturadoBs));
+    setTxt('libro-total-usd', `${formatUSD(totalFacturadoUsd)} USD`);
+    setTxt('libro-total-exento', formatBs(totalExentoBs));
+    setTxt('libro-total-base', formatBs(totalBaseBs));
+    setTxt('libro-total-iva', formatBs(totalIvaBs));
     setTxt('libro-operaciones-count', libroVentasData.length);
     const tbody = document.getElementById('libro-table-body');
     if (!tbody) return;
@@ -8316,16 +8896,17 @@ function renderLibroVentas() {
             <td class="p-2.5 font-mono text-slate-500">${r.nroControl}</td>
             <td class="p-2.5 font-mono font-bold">${r.rif}</td>
             <td class="p-2.5 font-bold truncate max-w-[160px]">${r.cliente}</td>
-            <td class="p-2.5 text-right font-black">${r.totalBs.toFixed(2)}</td>
-            <td class="p-2.5 text-right font-medium text-emerald-700">${r.exentoBs.toFixed(2)}</td>
-            <td class="p-2.5 text-right font-medium text-blue-700">${r.baseBs.toFixed(2)}</td>
-            <td class="p-2.5 text-right font-bold text-indigo-700">${r.ivaBs.toFixed(2)}</td>
+            <td class="p-2.5 text-right font-black">${formatBs(r.totalBs)}</td>
+            <td class="p-2.5 text-right font-medium text-emerald-700">${formatBs(r.exentoBs)}</td>
+            <td class="p-2.5 text-right font-medium text-blue-700">${formatBs(r.baseBs)}</td>
+            <td class="p-2.5 text-right font-bold text-indigo-700">${formatBs(r.ivaBs)}</td>
         </tr>
     `).join('');
 }
 
-function exportarLibroVentasExcel() {
-    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no cargada', 'error');
+async function exportarLibroVentasExcel() {
+    try { await ensureXLSX(); } catch(e) {}
+    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no disponible', 'error');
     if (libroVentasData.length === 0) return Swal.fire('Sin datos', 'No hay registros', 'info');
     const mesEl = document.getElementById('libro-mes');
     const anioEl = document.getElementById('libro-anio');
@@ -8334,7 +8915,8 @@ function exportarLibroVentasExcel() {
     const storeName = storeConfig.name || 'Mi Negocio';
     const storeRif = storeConfig.rif || 'J-00000000-0';
     const dataForSheet = [
-        ['LIBRO DE VENTAS SENIAT'],
+        ['REGISTRO DE VENTAS (REFERENCIAL)'],
+        ['Aviso: Documento de control interno no válido como factura fiscal ante el SENIAT'],
         [`RAZÓN SOCIAL: ${storeName}`],
         [`RIF: ${storeRif}`],
         [`PERÍODO: ${mesNombre.toUpperCase()} ${anio}`],
@@ -8356,7 +8938,7 @@ function exportarLibroVentasExcel() {
     const ws = XLSX.utils.aoa_to_sheet(dataForSheet);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Libro Ventas");
-    XLSX.writeFile(wb, `Libro_Ventas_SENIAT_${mesNombre}_${anio}.xlsx`);
+    XLSX.writeFile(wb, `Registro_Ventas_Referencial_${mesNombre}_${anio}.xlsx`);
     Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Libro exportado', timer: 2500, showConfirmButton: false });
 }
 
@@ -8375,7 +8957,8 @@ function imprimirLibroVentas() {
             <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px;">
                 <h2 style="margin: 0; font-size: 16px;">${storeConfig.name.toUpperCase()}</h2>
                 <p style="margin: 2px 0;">RIF: ${storeConfig.rif || 'J-00000000-0'}</p>
-                <h3 style="margin: 5px 0 0 0; font-size: 13px;">LIBRO DE VENTAS (SENIAT)</h3>
+                <h3 style="margin: 5px 0 0 0; font-size: 13px;">REGISTRO DE VENTAS (REFERENCIAL)</h3>
+                <p style="margin: 2px 0; font-size: 8px; color: #666;">Control administrativo interno. No sustituye la facturación fiscal oficial autorizada por el SENIAT.</p>
                 <p style="margin: 2px 0; font-weight: bold;">Período: ${mesNombre.toUpperCase()} ${anio}</p>
             </div>
             <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
@@ -11333,6 +11916,8 @@ function crearComandaCocina(saleData, saleId) {
 
     playKitchenAlertSound();
     renderKitchenDisplay();
+    checkDemoMode();
+    pintarTasaUI();
 
     Swal.fire({
         toast: true,
@@ -11533,6 +12118,8 @@ function cambiarEstadoComanda(comandaId, nuevoEstado) {
     } catch(e) {}
 
     renderKitchenDisplay();
+    checkDemoMode();
+    pintarTasaUI();
 }
 
 function imprimirComandaCocina(comandaId) {
@@ -11837,3 +12424,94 @@ function cargarDemoComidaRapida() {
     cargarDemoCategorias(Object.keys(DEMO_CATEGORIAS_COMIDA));
 }
 
+
+
+// Exportación consolidada ejecutiva de la Torre de Control en Excel
+async function exportarReporteConsolidadoTorre() {
+    if (!isAdmin) return;
+    try {
+        Swal.fire({
+            title: 'Generando informe consolidado...',
+            text: 'Consolidando métricas de sucursales e inventario',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        await ensureXLSX();
+        const rate = getBcvRate();
+        const branchMetrics = holdingBranches.map(b => obtenerMetricasSucursal(b));
+
+        // 1. Hoja de Resumen Global
+        let totalVentasUsd = 0;
+        let totalGananciaUsd = 0;
+        let totalFiadosUsd = 0;
+        let totalInvUsd = 0;
+        let totalSkus = 0;
+
+        branchMetrics.forEach(m => {
+            if (m.tieneDatos) {
+                totalVentasUsd += m.ventasUsd;
+                totalGananciaUsd += m.gananciaUsd;
+                totalFiadosUsd += m.fiadosUsd;
+                totalInvUsd += m.invValUsd;
+                totalSkus += m.skus;
+            }
+        });
+
+        const resumenData = [
+            ['INFORME CONSOLIDADO EJECUTIVO — GESTIÓNPRO TORRE DE CONTROL'],
+            ['Fecha de Emisión', new Date().toLocaleString('es-VE')],
+            ['Tasa Oficial BCV', formatBs(rate)],
+            ['Total Sucursales Registradas', holdingBranches.length],
+            [],
+            ['MÉTRICA GLOBAL', 'VALOR USD', 'VALOR BOLÍVARES (BCV)'],
+            ['Ventas del Día Consolidadas', totalVentasUsd, roundMoney(totalVentasUsd * rate)],
+            ['Utilidad / Ganancia Estimada', totalGananciaUsd, roundMoney(totalGananciaUsd * rate)],
+            ['Cuentas por Cobrar (Fiados en Calle)', totalFiadosUsd, roundMoney(totalFiadosUsd * rate)],
+            ['Inventario Valorado en Red', totalInvUsd, roundMoney(totalInvUsd * rate)],
+            ['Total Variedad de Productos (SKUs)', totalSkus, '']
+        ];
+
+        // 2. Hoja de Detalle por Sucursales
+        const sucursalesData = [
+            ['ID Sucursal', 'Nombre Comercial', 'Dirección', 'Cajero en Turno', 'Estado de Caja', 'Ventas Hoy ($)', 'Ventas Hoy (Bs)', 'Fiados ($)', 'Inventario Valorado ($)', 'Cant. SKUs']
+        ];
+
+        branchMetrics.forEach(m => {
+            sucursalesData.push([
+                m.id,
+                m.nombre,
+                m.direccion || 'Principal',
+                m.cajero || 'Sin asignar',
+                m.estado,
+                m.tieneDatos ? m.ventasUsd : 'Sin datos locales',
+                m.tieneDatos ? roundMoney(m.ventasUsd * rate) : '',
+                m.tieneDatos ? m.fiadosUsd : '',
+                m.tieneDatos ? m.invValUsd : '',
+                m.tieneDatos ? m.skus : ''
+            ]);
+        });
+
+        const wb = XLSX.utils.book_new();
+        const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+        const wsSucursales = XLSX.utils.aoa_to_sheet(sucursalesData);
+
+        XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen Ejecutivo');
+        XLSX.utils.book_append_sheet(wb, wsSucursales, 'Detalle Sucursales');
+
+        const fechaArchivo = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(wb, `Consolidado_Torre_Control_${fechaArchivo}.xlsx`);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Reporte Generado',
+            text: 'El informe consolidado se descargó con éxito.',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } catch (err) {
+        console.error('Error al exportar consolidado:', err);
+        Swal.fire('Error', 'No se pudo generar el reporte consolidado: ' + err.message, 'error');
+    }
+}
+window.exportarReporteConsolidadoTorre = exportarReporteConsolidadoTorre;
