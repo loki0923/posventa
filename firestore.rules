@@ -226,14 +226,22 @@ service cloud.firestore {
       allow delete: if false;
 
       // ---------------------------------------------------------------
-      // PRODUCTOS
-      // Lectura pública: la necesita el catálogo web (catalogo.html:367).
-      // OJO: Firestore NO permite ocultar campos en lectura, así que
-      // `costo` y `stock` siguen siendo consultables por la API pública.
-      // Se cierra en FASE 2 con una colección de proyección pública.
+      // PRODUCTOS PÚBLICOS (proyección segura para catalogo.html)
+      // Lectura pública: solo expone nombre, precio, categoría, tipo,
+      // imagen y disponibilidad. NO expone costo ni stock exacto.
+      // ---------------------------------------------------------------
+      match /products_public/{productId} {
+        allow read: if true;
+        allow write: if esAdminDe(negocioId);
+      }
+
+      // ---------------------------------------------------------------
+      // PRODUCTOS (Inventario interno del negocio)
+      // Lectura privada: solo miembros del negocio.
+      // Cierra de raíz la fuga de costos de Fase 1.
       // ---------------------------------------------------------------
       match /products/{productId} {
-        allow read: if true;
+        allow read: if esMiembro(negocioId);
 
         allow create, delete: if esAdminDe(negocioId);
 

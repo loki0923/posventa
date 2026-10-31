@@ -292,6 +292,102 @@
         </div>
     </div>
 
+    <!-- MODAL SELECTOR DE PESO / CANTIDAD EXACTA -->
+    <div id="weight-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 hidden opacity-0 transition-opacity">
+        <div class="bg-white rounded-[28px] p-6 w-full max-w-md mx-4 max-h-[92vh] flex flex-col transform scale-95 transition-all shadow-2xl border border-slate-100" id="weight-modal-content">
+            
+            <div class="sheet-handle"></div>
+
+            <div class="flex items-start justify-between pb-3 border-b border-slate-100 shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg border border-amber-100 shrink-0">
+                        <i class="fa-solid fa-scale-balanced"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span id="weight-modal-cat" class="text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200/60">Venta por Peso</span>
+                            <span id="weight-modal-stock" class="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Stock: 0 Kg</span>
+                        </div>
+                        <h3 id="weight-modal-name" class="text-base sm:text-lg font-black text-slate-900 capitalize truncate mt-0.5">Producto</h3>
+                    </div>
+                </div>
+                <button type="button" onclick="cerrarModalPeso()" class="ios-touch w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Precio de Referencia -->
+            <div class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100 my-3 shrink-0">
+                <span class="text-xs font-bold text-slate-500">Precio por Kilogramo:</span>
+                <div class="text-right">
+                    <span id="weight-modal-price" class="text-sm font-black text-emerald-600 tabular-nums">$0.00 / Kg</span>
+                    <span id="weight-modal-price-bs" class="block text-[10px] font-bold text-slate-400 tabular-nums">(Bs 0.00 / Kg)</span>
+                </div>
+            </div>
+
+            <!-- Accesos rápidos / Chips de Gramos y Kilos -->
+            <div class="mb-3 shrink-0">
+                <div class="flex justify-between items-center mb-1.5">
+                    <label class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Porción Rápida:</label>
+                    <span class="text-[10px] font-semibold text-indigo-600">1 toque</span>
+                </div>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                    <button type="button" onclick="setPresetPeso(0.250)" class="quick-weight-btn py-2 px-1 rounded-xl text-xs font-black bg-slate-100 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 text-slate-700 border border-slate-200/80 transition-all active:scale-95 text-center">250g</button>
+                    <button type="button" onclick="setPresetPeso(0.500)" class="quick-weight-btn py-2 px-1 rounded-xl text-xs font-black bg-slate-100 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 text-slate-700 border border-slate-200/80 transition-all active:scale-95 text-center">500g</button>
+                    <button type="button" onclick="setPresetPeso(0.750)" class="quick-weight-btn py-2 px-1 rounded-xl text-xs font-black bg-slate-100 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 text-slate-700 border border-slate-200/80 transition-all active:scale-95 text-center">750g</button>
+                    <button type="button" onclick="setPresetPeso(1.000)" class="quick-weight-btn py-2 px-1 rounded-xl text-xs font-black bg-slate-100 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 text-slate-700 border border-slate-200/80 transition-all active:scale-95 text-center">1.0 Kg</button>
+                    <button type="button" onclick="setPresetPeso(1.500)" class="quick-weight-btn py-2 px-1 rounded-xl text-xs font-black bg-slate-100 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 text-slate-700 border border-slate-200/80 transition-all active:scale-95 text-center">1.5 Kg</button>
+                    <button type="button" onclick="setPresetPeso(2.000)" class="quick-weight-btn py-2 px-1 rounded-xl text-xs font-black bg-slate-100 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 text-slate-700 border border-slate-200/80 transition-all active:scale-95 text-center">2.0 Kg</button>
+                </div>
+            </div>
+
+            <!-- Pantalla Digital con Stepper (+ / -) y Entrada Exacta -->
+            <div class="mb-3.5 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 shrink-0">
+                <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 text-center mb-1">Escribe la cantidad exacta o ajusta con (+ / −)</div>
+                <div class="flex items-center justify-between gap-2">
+                    <button type="button" onclick="ajustarPesoModal(-0.100)" class="w-11 h-11 rounded-xl bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 flex items-center justify-center font-black text-lg shadow-sm active:scale-90 transition-all shrink-0" title="Restar 100g">
+                        <i class="fa-solid fa-minus text-sm"></i>
+                    </button>
+
+                    <div class="flex-1 flex items-center justify-center gap-1.5 px-2">
+                        <input id="weight-modal-input" type="text" inputmode="decimal" autocomplete="off" class="w-full text-center font-black text-3xl sm:text-4xl text-slate-900 bg-transparent outline-none tabular-nums focus:ring-0 border-b-2 border-amber-500/60 focus:border-amber-600 transition-colors" value="0.500">
+                        <span class="text-sm font-black uppercase text-amber-700 tracking-wider shrink-0">Kg</span>
+                    </div>
+
+                    <button type="button" onclick="ajustarPesoModal(0.100)" class="w-11 h-11 rounded-xl bg-white text-slate-700 hover:bg-emerald-50 hover:text-emerald-600 border border-slate-200 flex items-center justify-center font-black text-lg shadow-sm active:scale-90 transition-all shrink-0" title="Sumar 100g">
+                        <i class="fa-solid fa-plus text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Total Estimado en Vivo -->
+                <div class="mt-3 pt-2.5 border-t border-slate-200/60 text-center">
+                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total estimado</div>
+                    <div class="flex items-center justify-center gap-2 mt-0.5">
+                        <span class="text-2xl font-black text-slate-900 tabular-nums" id="weight-modal-total-usd">$0.00</span>
+                        <span class="text-xs font-bold text-slate-300">·</span>
+                        <span class="text-xs font-bold text-slate-500 tabular-nums" id="weight-modal-total-bs">Bs 0.00</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1 italic">El peso exacto se verificará en balanza al despachar.</p>
+                </div>
+            </div>
+
+            <!-- Footer: Botones de Acción -->
+            <div class="flex items-center gap-2 pt-1 shrink-0">
+                <button type="button" id="weight-modal-btn-remove" onclick="eliminarPesoModal()" class="w-11 h-11 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center transition-all hidden shrink-0" title="Quitar del pedido">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                </button>
+                <button type="button" onclick="cerrarModalPeso()" class="flex-1 py-3 px-3 rounded-xl text-slate-500 hover:text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors text-center">
+                    Cancelar
+                </button>
+                <button type="button" id="weight-modal-btn-confirm" onclick="confirmarPesoModal()" class="flex-[2] py-3.5 px-4 rounded-2xl bg-gradient-to-r from-slate-900 to-indigo-900 hover:from-slate-800 hover:to-indigo-800 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/20 transition-all active:scale-[0.98]">
+                    <i class="fa-solid fa-cart-plus text-emerald-400"></i>
+                    <span id="weight-modal-confirm-text">Añadir al Pedido</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
     <!-- SCRIPT LOGICA TIENDA ONLINE -->
     <script>
         const firebaseConfig = {
@@ -375,12 +471,12 @@
 
         // Parámetro de URL para negocioId (soporta ?negocio= o ?id=)
         const urlParams = new URLSearchParams(window.location.search);
-        const negocioIdCrudo = urlParams.get('negocio') || urlParams.get('id') || 'bodega-demo';
+        const negocioIdCrudo = urlParams.get('negocio') || urlParams.get('id') || '';
         const negocioId = negocioIdValido(negocioIdCrudo) ? negocioIdCrudo : '';
 
         let productsList = [];
         let catalogCart = [];
-        let tasaBcv = 36.50;
+        let tasaBcv = 0;
         let storeData = {
             name: 'Bodega & Víveres',
             rif: '',
@@ -425,13 +521,41 @@
                     if (!btn || !cont.contains(btn)) return;
                     const id = btn.dataset.id;
                     const accion = btn.dataset.accion;
-                    if (accion === 'agregar') agregarAlCarrito(id);
-                    else if (accion === 'sumar') modificarItemCarrito(id, 1);
-                    else if (accion === 'restar') modificarItemCarrito(id, -1);
+                    const p = productsList.find(x => x.id === id) || catalogCart.find(x => x.id === id);
+                    const isPeso = p ? esProductoPesable(p) : false;
+
+                    if (accion === 'pesar') {
+                        abrirModalPeso(id);
+                    } else if (accion === 'agregar') {
+                        if (isPeso) abrirModalPeso(id);
+                        else agregarAlCarrito(id);
+                    } else if (accion === 'sumar') {
+                        if (isPeso) abrirModalPeso(id);
+                        else modificarItemCarrito(id, 1);
+                    } else if (accion === 'restar') {
+                        if (isPeso) modificarItemCarrito(id, -0.250);
+                        else modificarItemCarrito(id, -1);
+                    }
                 });
             };
             conectarDelegado('products-grid');
             conectarDelegado('cart-modal-items');
+
+            const pesoInput = document.getElementById('weight-modal-input');
+            if (pesoInput) {
+                pesoInput.addEventListener('input', () => {
+                    actualizarCalculoModalPeso();
+                });
+                pesoInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        confirmarPesoModal();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cerrarModalPeso();
+                    }
+                });
+            }
 
             await cargarDatosTienda();
             await cargarTasa();
@@ -478,13 +602,14 @@
         }
 
         function cargarProductos() {
-            db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snap) => {
+            function procesarSnapProductos(snap) {
                 productsList = [];
                 const catSet = new Set();
                 snap.forEach(doc => {
                     const p = { id: doc.id, ...doc.data() };
-                    // Filtrar solo productos con stock disponible
-                    if (parseFloat(p.stock) > 0) {
+                    // Proyección pública usa 'disponible: true' o 'activo !== false'; products privado usa 'stock > 0'
+                    const estaDisponible = (p.disponible !== undefined) ? (p.disponible === true && p.activo !== false) : (parseFloat(p.stock) > 0);
+                    if (estaDisponible) {
                         productsList.push(p);
                         if (p.categoria) catSet.add(p.categoria);
                     }
@@ -493,15 +618,41 @@
                 document.getElementById('products-loading').classList.add('hidden');
                 renderCategorias(Array.from(catSet));
                 filtrarProductos();
+            }
+
+            function mostrarErrorCarga() {
+                const el = document.getElementById('products-loading');
+                if (el) {
+                    el.innerHTML = `
+                        <div class="p-6 bg-amber-50 border border-amber-200 rounded-3xl max-w-sm mx-auto text-amber-800 shadow-sm">
+                            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-600"></i>
+                            <p class="font-bold text-xs">No se pudo cargar el catálogo de este negocio.</p>
+                            <p class="text-[11px] text-amber-700 mt-1">Verifica el enlace o contacta directamente a la tienda.</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // 1. Intentar cargar la proyección pública (products_public, segura sin exponer costos ni inventario interno)
+            db.collection('negocios').doc(negocioId).collection('products_public').onSnapshot((snapPublic) => {
+                if (snapPublic && !snapPublic.empty) {
+                    procesarSnapProductos(snapPublic);
+                    return;
+                }
+                // 2. Fallback de migración: leer de products si aún no existe proyección pública
+                db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snapPriv) => {
+                    procesarSnapProductos(snapPriv);
+                }, (err) => {
+                    console.error("Error al cargar productos fallback:", err);
+                    mostrarErrorCarga();
+                });
             }, (err) => {
-                console.error("Error al cargar productos del catálogo:", err);
-                document.getElementById('products-loading').innerHTML = `
-                    <div class="p-6 bg-amber-50 border border-amber-200 rounded-3xl max-w-sm mx-auto text-amber-800 shadow-sm">
-                        <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-600"></i>
-                        <p class="font-bold text-xs">No se pudo cargar el catálogo de este negocio.</p>
-                        <p class="text-[11px] text-amber-700 mt-1">Verifica el enlace o contacta directamente a la tienda.</p>
-                    </div>
-                `;
+                db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snapPriv) => {
+                    procesarSnapProductos(snapPriv);
+                }, (err2) => {
+                    console.error("Error al cargar productos:", err2);
+                    mostrarErrorCarga();
+                });
             });
         }
 
@@ -545,6 +696,203 @@
             filtrarProductos();
         }
 
+        // =================================================================
+        // SOPORTE DE PRODUCTOS POR PESO (BALANZA / KILOGRAMOS)
+        // =================================================================
+        let currentWeightProduct = null;
+
+        function esProductoPesable(p) {
+            if (!p) return false;
+            const tipoStr = String(p.tipo || '').toLowerCase().trim();
+            if (['kg', 'kilo', 'kilos', 'kilogramo', 'kilogramos', 'peso', 'g', 'gr', 'gramo', 'gramos'].includes(tipoStr)) {
+                return true;
+            }
+            const unidadStr = String(p.unidad || p.unidadMedida || '').toLowerCase().trim();
+            if (['kg', 'kilo', 'kilos', 'peso'].includes(unidadStr)) return true;
+
+            const nomStr = String(p.nombre || '').toLowerCase();
+            if (nomStr.includes('/kg') || nomStr.includes('(kg)') || nomStr.includes(' por kg') || nomStr.includes(' x kg')) {
+                return true;
+            }
+            return false;
+        }
+
+        function formatQtyCatalog(qty, isPeso) {
+            const num = parseFloat(qty) || 0;
+            if (isPeso) {
+                return `${num.toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} Kg`;
+            }
+            return Math.round(num).toString();
+        }
+
+        function parseInputPeso(valorStr) {
+            if (!valorStr) return 0;
+            const limpio = String(valorStr).replace(',', '.').replace(/[^0-9.]/g, '');
+            const partes = limpio.split('.');
+            if (partes.length > 2) {
+                return parseFloat(partes[0] + '.' + partes.slice(1).join('')) || 0;
+            }
+            return parseFloat(limpio) || 0;
+        }
+
+        function abrirModalPeso(id) {
+            const p = productsList.find(x => x.id === id) || catalogCart.find(x => x.id === id);
+            if (!p) return;
+            currentWeightProduct = p;
+
+            const enCarrito = catalogCart.find(x => x.id === id);
+            const initialQty = enCarrito ? Number(enCarrito.qty) : 0.500;
+
+            const modal = document.getElementById('weight-modal');
+            const content = document.getElementById('weight-modal-content');
+            if (!modal) return;
+
+            document.getElementById('weight-modal-name').textContent = p.nombre || 'Producto';
+            document.getElementById('weight-modal-cat').textContent = p.categoria ? `${p.categoria} (Por Kg)` : 'Venta por Peso';
+
+            const precioUnit = parseFloat(p.precio) || 0;
+            const precioBs = precioUnit * tasaBcv;
+            document.getElementById('weight-modal-price').textContent = `$${precioUnit.toFixed(2)} / Kg`;
+            document.getElementById('weight-modal-price-bs').textContent = `(Bs ${precioBs.toFixed(2)} / Kg)`;
+
+            const stock = parseFloat(p.stock) || 0;
+            document.getElementById('weight-modal-stock').textContent = `Stock disp: ${stock.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Kg`;
+
+            const input = document.getElementById('weight-modal-input');
+            if (input) input.value = initialQty.toFixed(3);
+
+            const btnConfirmText = document.getElementById('weight-modal-confirm-text');
+            if (btnConfirmText) {
+                btnConfirmText.textContent = enCarrito ? 'Guardar Cambios' : 'Añadir al Pedido';
+            }
+
+            const btnRemove = document.getElementById('weight-modal-btn-remove');
+            if (btnRemove) {
+                btnRemove.classList.toggle('hidden', !enCarrito);
+            }
+
+            actualizarCalculoModalPeso();
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                if (content) content.classList.remove('scale-95');
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            }, 10);
+        }
+
+        function cerrarModalPeso() {
+            const modal = document.getElementById('weight-modal');
+            const content = document.getElementById('weight-modal-content');
+            if (!modal) return;
+            modal.classList.add('opacity-0');
+            if (content) content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                currentWeightProduct = null;
+            }, 200);
+        }
+
+        function setPresetPeso(valor) {
+            const input = document.getElementById('weight-modal-input');
+            if (!input) return;
+            input.value = Number(valor).toFixed(3);
+            actualizarCalculoModalPeso();
+        }
+
+        function ajustarPesoModal(delta) {
+            const input = document.getElementById('weight-modal-input');
+            if (!input) return;
+            const valActual = parseInputPeso(input.value);
+            const nuevoVal = Math.max(0.050, Math.round((valActual + delta) * 1000) / 1000);
+            input.value = nuevoVal.toFixed(3);
+            actualizarCalculoModalPeso();
+        }
+
+        function actualizarCalculoModalPeso() {
+            if (!currentWeightProduct) return;
+            const input = document.getElementById('weight-modal-input');
+            const valActual = parseInputPeso(input ? input.value : '0.500');
+            const precioUnit = parseFloat(currentWeightProduct.precio) || 0;
+            const subtotalUsd = valActual * precioUnit;
+            const subtotalBs = subtotalUsd * tasaBcv;
+
+            const elUsd = document.getElementById('weight-modal-total-usd');
+            const elBs = document.getElementById('weight-modal-total-bs');
+            if (elUsd) elUsd.textContent = `$${subtotalUsd.toFixed(2)}`;
+            if (elBs) elBs.textContent = `Bs ${subtotalBs.toFixed(2)}`;
+        }
+
+        function confirmarPesoModal() {
+            if (!currentWeightProduct) return;
+            const input = document.getElementById('weight-modal-input');
+            const qty = parseInputPeso(input ? input.value : '0');
+
+            if (qty <= 0) {
+                return Swal.fire({
+                    title: 'Cantidad inválida',
+                    text: 'Por favor ingresa un peso mayor a cero.',
+                    icon: 'warning',
+                    confirmButtonColor: '#0f172a'
+                });
+            }
+
+            const stock = parseFloat(currentWeightProduct.stock) || 0;
+            if (stock > 0 && qty > stock) {
+                return Swal.fire({
+                    title: 'Stock Insuficiente',
+                    text: `Solo disponemos de ${stock.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Kg en inventario.`,
+                    icon: 'warning',
+                    confirmButtonColor: '#0f172a'
+                });
+            }
+
+            const p = currentWeightProduct;
+            const idx = catalogCart.findIndex(x => x.id === p.id);
+            const pesoFinal = Math.round(qty * 1000) / 1000;
+
+            if (idx !== -1) {
+                catalogCart[idx].qty = pesoFinal;
+            } else {
+                catalogCart.push({
+                    id: p.id,
+                    nombre: p.nombre,
+                    precio: parseFloat(p.precio) || 0,
+                    tipo: p.tipo || 'Kg',
+                    imagen: p.imagen,
+                    qty: pesoFinal
+                });
+            }
+
+            cerrarModalPeso();
+            actualizarUI();
+
+            const Toast = Swal.mixin({
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 1600,
+                timerProgressBar: true
+            });
+            Toast.fire({
+                icon: 'success',
+                title: `${pesoFinal.toFixed(3)} Kg de ${p.nombre} en tu pedido`
+            });
+        }
+
+        function eliminarPesoModal() {
+            if (!currentWeightProduct) return;
+            const idx = catalogCart.findIndex(x => x.id === currentWeightProduct.id);
+            if (idx !== -1) {
+                catalogCart.splice(idx, 1);
+            }
+            cerrarModalPeso();
+            actualizarUI();
+        }
+
         function filtrarProductos() {
             const query = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
             const grid = document.getElementById('products-grid');
@@ -581,6 +929,7 @@
                 const stock = parseFloat(p.stock) || 0;
                 const enCarrito = catalogCart.find(i => i.id === p.id);
                 const cant = enCarrito ? enCarrito.qty : 0;
+                const isPeso = esProductoPesable(p);
 
                 const card = document.createElement('div');
                 card.className = 'cat-card p-3.5 flex flex-col justify-between';
@@ -597,17 +946,30 @@
                 const cuerpo = document.createElement('div');
 
                 const fila = document.createElement('div');
-                fila.className = 'flex items-center justify-between';
+                fila.className = 'flex items-center justify-between gap-1';
+
+                const catBox = document.createElement('div');
+                catBox.className = 'flex items-center gap-1 flex-wrap';
 
                 const cat = document.createElement('span');
                 cat.className = 'text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-100/60 px-2 py-0.5 rounded-md';
                 cat.textContent = String(p.categoria || 'General');
+                catBox.appendChild(cat);
+
+                if (isPeso) {
+                    const badgePeso = document.createElement('span');
+                    badgePeso.className = 'text-[9px] font-black uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded-md flex items-center gap-1';
+                    badgePeso.innerHTML = '<i class="fa-solid fa-scale-balanced text-[8px]"></i> Kg';
+                    catBox.appendChild(badgePeso);
+                }
 
                 const disp = document.createElement('span');
-                disp.className = 'text-[9px] font-bold text-slate-400 tabular-nums';
-                disp.textContent = `${stock.toFixed(0)} disp.`;
+                disp.className = 'text-[9px] font-bold text-slate-400 tabular-nums shrink-0';
+                disp.textContent = isPeso 
+                    ? `${stock.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Kg disp.`
+                    : `${stock.toFixed(0)} disp.`;
 
-                fila.append(cat, disp);
+                fila.append(catBox, disp);
 
                 const titulo = document.createElement('h3');
                 titulo.className = 'font-extrabold text-xs md:text-sm text-slate-800 mt-2 line-clamp-2 leading-snug';
@@ -616,15 +978,22 @@
                 cuerpo.append(fila, titulo);
 
                 const pie = document.createElement('div');
-                pie.className = 'mt-3 pt-2.5 border-t border-slate-100 flex items-end justify-between';
+                pie.className = 'mt-3 pt-2.5 border-t border-slate-100 flex items-end justify-between gap-1';
 
                 const precios = document.createElement('div');
                 const pUsd = document.createElement('span');
                 pUsd.className = 'text-base font-black text-slate-900 leading-none tabular-nums';
                 pUsd.textContent = `$${precioUsd.toFixed(2)}`;
+                if (isPeso) {
+                    const sufijoKg = document.createElement('span');
+                    sufijoKg.className = 'text-[11px] font-extrabold text-slate-400 ml-0.5';
+                    sufijoKg.textContent = '/ Kg';
+                    pUsd.appendChild(sufijoKg);
+                }
+
                 const pBs = document.createElement('div');
                 pBs.className = 'text-[10px] font-bold text-slate-400 mt-0.5 tabular-nums';
-                pBs.textContent = `Bs ${precioBs.toFixed(2)}`;
+                pBs.textContent = isPeso ? `Bs ${precioBs.toFixed(2)} / Kg` : `Bs ${precioBs.toFixed(2)}`;
                 precios.append(pUsd, pBs);
                 pie.appendChild(precios);
 
@@ -639,28 +1008,50 @@
                     menos.dataset.accion = 'restar';
                     menos.dataset.id = String(p.id);
 
-                    const cuenta = document.createElement('span');
-                    cuenta.className = 'text-xs font-black px-1.5 tabular-nums';
-                    cuenta.textContent = String(cant);
+                    const cuenta = document.createElement(isPeso ? 'button' : 'span');
+                    cuenta.className = isPeso 
+                        ? 'ios-touch text-xs font-black px-1.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 tabular-nums flex items-center gap-1 cursor-pointer'
+                        : 'text-xs font-black px-1.5 tabular-nums';
+                    if (isPeso) {
+                        cuenta.type = 'button';
+                        cuenta.dataset.accion = 'pesar';
+                        cuenta.dataset.id = String(p.id);
+                        cuenta.title = 'Clic para cambiar peso exacto';
+                        cuenta.innerHTML = `<span>${formatQtyCatalog(cant, true)}</span> <i class="fa-solid fa-pen text-[8px] opacity-70"></i>`;
+                    } else {
+                        cuenta.textContent = String(cant);
+                    }
 
                     const mas = document.createElement('button');
                     mas.type = 'button';
                     mas.className = 'ios-touch w-6 h-6 rounded-lg bg-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center';
                     mas.textContent = '+';
-                    mas.dataset.accion = 'sumar';
+                    mas.dataset.accion = isPeso ? 'pesar' : 'sumar';
                     mas.dataset.id = String(p.id);
+                    if (isPeso) mas.title = 'Ajustar peso';
 
                     grupo.append(menos, cuenta, mas);
                     pie.appendChild(grupo);
                 } else {
                     const agregar = document.createElement('button');
                     agregar.type = 'button';
-                    agregar.className = 'ios-touch w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-md transition-all';
-                    agregar.dataset.accion = 'agregar';
+                    agregar.className = isPeso
+                        ? 'ios-touch h-8 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white flex items-center gap-1.5 shadow-md transition-all text-xs font-black'
+                        : 'ios-touch w-8 h-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-md transition-all';
+                    agregar.dataset.accion = isPeso ? 'pesar' : 'agregar';
                     agregar.dataset.id = String(p.id);
-                    const icono = document.createElement('i');
-                    icono.className = 'fa-solid fa-plus text-xs';
-                    agregar.appendChild(icono);
+
+                    if (isPeso) {
+                        const iconKg = document.createElement('i');
+                        iconKg.className = 'fa-solid fa-scale-balanced text-[11px] text-emerald-400';
+                        const txtKg = document.createElement('span');
+                        txtKg.textContent = 'Pedir';
+                        agregar.append(iconKg, txtKg);
+                    } else {
+                        const icono = document.createElement('i');
+                        icono.className = 'fa-solid fa-plus text-xs';
+                        agregar.appendChild(icono);
+                    }
                     pie.appendChild(agregar);
                 }
 
@@ -672,12 +1063,13 @@
         function agregarAlCarrito(id) {
             const p = productsList.find(x => x.id === id);
             if (!p) return;
+            if (esProductoPesable(p)) {
+                return abrirModalPeso(id);
+            }
             const existe = catalogCart.find(x => x.id === id);
             if (existe) {
                 if (existe.qty < (parseFloat(p.stock) || 0)) existe.qty += 1;
             } else {
-                // Se guarda la imagen: antes no se copiaba y por eso el carrito
-                // nunca mostraba la foto del producto.
                 catalogCart.push({
                     id: p.id,
                     nombre: p.nombre,
@@ -693,8 +1085,11 @@
         function modificarItemCarrito(id, delta) {
             const idx = catalogCart.findIndex(x => x.id === id);
             if (idx === -1) return;
-            catalogCart[idx].qty += delta;
-            if (catalogCart[idx].qty <= 0) {
+            const item = catalogCart[idx];
+            const isPeso = esProductoPesable(item);
+            
+            item.qty = Math.round((item.qty + delta) * 1000) / 1000;
+            if (item.qty <= (isPeso ? 0.001 : 0)) {
                 catalogCart.splice(idx, 1);
             }
             actualizarUI();
@@ -704,7 +1099,7 @@
             filtrarProductos();
             const totalUsd = catalogCart.reduce((sum, item) => sum + (item.precio * item.qty), 0);
             const totalBs = totalUsd * tasaBcv;
-            const totalCount = catalogCart.reduce((sum, item) => sum + item.qty, 0);
+            const totalCount = catalogCart.length;
 
             // Header
             document.getElementById('header-cart-total').textContent = `$${totalUsd.toFixed(2)}`;
@@ -719,7 +1114,7 @@
             // Barra flotante
             const floatingBar = document.getElementById('floating-cart-bar');
             if (totalCount > 0) {
-                document.getElementById('floating-cart-count').textContent = `${totalCount} artículo(s)`;
+                document.getElementById('floating-cart-count').textContent = `${totalCount} producto${totalCount === 1 ? '' : 's'}`;
                 const ft = document.getElementById('floating-cart-total');
                 if (ft) {
                     ft.textContent = `$${totalUsd.toFixed(2)} `;
@@ -753,11 +1148,12 @@
                 // dentro de onclick="...('${i.id}')" y el nombre en innerHTML.
                 itemsContainer.textContent = '';
                 catalogCart.forEach(i => {
+                    const isPeso = esProductoPesable(i);
                     const fila = document.createElement('div');
                     fila.className = 'flex items-center justify-between pt-2.5 gap-2';
 
                     const izq = document.createElement('div');
-                    izq.className = 'flex items-center gap-2.5 flex-1 pr-2';
+                    izq.className = 'flex items-center gap-2.5 flex-1 pr-2 min-w-0';
 
                     const img = crearImagen(i.imagen, 'w-full h-full object-cover');
                     if (img) {
@@ -768,17 +1164,28 @@
                     }
 
                     const datos = document.createElement('div');
+                    datos.className = 'min-w-0';
+
                     const nombre = document.createElement('h4');
-                    nombre.className = 'font-extrabold text-xs text-slate-800 leading-snug';
+                    nombre.className = 'font-extrabold text-xs text-slate-800 leading-snug flex items-center gap-1 flex-wrap';
                     nombre.textContent = String(i.nombre || 'Producto');
+                    if (isPeso) {
+                        const badgePeso = document.createElement('span');
+                        badgePeso.className = 'text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/50 inline-flex items-center gap-0.5';
+                        badgePeso.innerHTML = '<i class="fa-solid fa-scale-balanced text-[8px]"></i> Kg';
+                        nombre.appendChild(badgePeso);
+                    }
+
                     const precio = document.createElement('p');
                     precio.className = 'text-[11px] text-slate-400 font-bold tabular-nums';
-                    precio.textContent = `$${(Number(i.precio) || 0).toFixed(2)} c/u`;
+                    precio.textContent = isPeso 
+                        ? `$${(Number(i.precio) || 0).toFixed(2)} / Kg`
+                        : `$${(Number(i.precio) || 0).toFixed(2)} c/u`;
                     datos.append(nombre, precio);
                     izq.appendChild(datos);
 
                     const der = document.createElement('div');
-                    der.className = 'flex items-center gap-2';
+                    der.className = 'flex items-center gap-2 shrink-0';
 
                     const grupo = document.createElement('div');
                     grupo.className = 'flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl';
@@ -790,16 +1197,27 @@
                     menos.dataset.accion = 'restar';
                     menos.dataset.id = String(i.id);
 
-                    const cuenta = document.createElement('span');
-                    cuenta.className = 'text-xs font-black px-1.5 tabular-nums';
-                    cuenta.textContent = String(i.qty);
+                    const cuenta = document.createElement(isPeso ? 'button' : 'span');
+                    cuenta.className = isPeso 
+                        ? 'ios-touch text-xs font-black px-1.5 py-0.5 rounded bg-white text-indigo-700 hover:text-indigo-900 shadow-xs tabular-nums flex items-center gap-1 cursor-pointer'
+                        : 'text-xs font-black px-1.5 tabular-nums';
+                    if (isPeso) {
+                        cuenta.type = 'button';
+                        cuenta.dataset.accion = 'pesar';
+                        cuenta.dataset.id = String(i.id);
+                        cuenta.title = 'Clic para editar peso exacto';
+                        cuenta.innerHTML = `<span>${formatQtyCatalog(i.qty, true)}</span> <i class="fa-solid fa-pen text-[7px] text-slate-400"></i>`;
+                    } else {
+                        cuenta.textContent = String(i.qty);
+                    }
 
                     const mas = document.createElement('button');
                     mas.type = 'button';
                     mas.className = 'ios-touch w-6 h-6 rounded-lg bg-slate-900 text-white font-bold text-xs shadow-sm flex items-center justify-center';
                     mas.textContent = '+';
-                    mas.dataset.accion = 'sumar';
+                    mas.dataset.accion = isPeso ? 'pesar' : 'sumar';
                     mas.dataset.id = String(i.id);
+                    if (isPeso) mas.title = 'Ajustar peso';
 
                     grupo.append(menos, cuenta, mas);
 
@@ -863,13 +1281,18 @@
                 entrega: entrega,
                 direccion: direccion || (entrega === 'Delivery' ? 'Sin dirección' : 'Retiro en Tienda'),
                 formaPago: pago,
-                items: catalogCart.map(i => ({
-                    id: i.id,
-                    nombre: i.nombre,
-                    precio: parseFloat(i.precio) || 0,
-                    qty: parseInt(i.qty) || 1,
-                    total: parseFloat(((parseFloat(i.precio) || 0) * (parseInt(i.qty) || 1)).toFixed(2))
-                })),
+                items: catalogCart.map(i => {
+                    const isPeso = esProductoPesable(i);
+                    const cantVal = isPeso ? parseFloat(Number(i.qty).toFixed(3)) : (parseInt(i.qty, 10) || 1);
+                    return {
+                        id: i.id,
+                        nombre: i.nombre,
+                        precio: parseFloat(i.precio) || 0,
+                        qty: cantVal,
+                        tipo: isPeso ? 'Kg' : (i.tipo || 'Unidad'),
+                        total: parseFloat(((parseFloat(i.precio) || 0) * cantVal).toFixed(2))
+                    };
+                }),
                 totalUsd: parseFloat(totalUsd.toFixed(2)),
                 totalBs: parseFloat(totalBs.toFixed(2)),
                 tasaBcv: tasaBcv,
@@ -902,7 +1325,14 @@
             } catch(e) {}
 
             // 3. Preparar mensaje de WhatsApp
-            let lineas = catalogCart.map(i => `• ${i.qty}x ${i.nombre} - $${(i.precio * i.qty).toFixed(2)}`).join('\n');
+            let lineas = catalogCart.map(i => {
+                const isPeso = esProductoPesable(i);
+                if (isPeso) {
+                    const pesoFmt = Number(i.qty).toLocaleString('es-VE', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+                    return `• ${pesoFmt} Kg de ${i.nombre} ($${(Number(i.precio) || 0).toFixed(2)}/Kg) - $${(i.precio * i.qty).toFixed(2)}`;
+                }
+                return `• ${i.qty}x ${i.nombre} - $${(i.precio * i.qty).toFixed(2)}`;
+            }).join('\n');
 
             let msg = `🛍️ *¡NUEVO PEDIDO DESDE CATÁLOGO ONLINE! (Ref: #${orderId})*\n\n`;
             msg += `👤 *Cliente:* ${nombre}\n`;
