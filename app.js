@@ -5191,18 +5191,20 @@ async function guardarGasto() {
     const categoria = document.getElementById('gasto-categoria') ? document.getElementById('gasto-categoria').value : 'Otros Gastos';
     const origen = document.getElementById('gasto-origen') ? document.getElementById('gasto-origen').value : 'Gaveta Efectivo USD';
     const concepto = document.getElementById('gasto-concepto').value.trim();
+    const comprobante = document.getElementById('gasto-comprobante')?.value.trim() || '';
     const monto = parseFloat(document.getElementById('gasto-monto').value);
     const moneda = document.getElementById('gasto-moneda').value;
     if (!concepto || isNaN(monto) || monto <= 0) return Swal.fire('Atención', 'Datos inválidos', 'warning');
     let montoUsd = moneda === 'BS' ? bsToUsd(monto) : monto;
     try {
         await getDb('gastos').add({
-            concepto, categoria, origen, montoOriginal: monto, moneda, montoUsd, status: 'abierto',
-            cajero: currentUser.email,
-            fechaStr: new Date().toLocaleString(),
+            concepto, categoria, origen, comprobante, montoOriginal: monto, moneda, montoUsd, status: 'abierto',
+            cajero: currentUser?.email || 'cajero',
+            fechaStr: new Date().toLocaleString('es-VE'),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         });
         closeGastoModal();
+        if (document.getElementById('gasto-comprobante')) document.getElementById('gasto-comprobante').value = '';
         Swal.fire({ title: 'Registrado', text: `Salida ${formatUSD(montoUsd)} (${categoria})`, icon: 'success', timer: 1500, showConfirmButton: false });
     } catch (e) {
         Swal.fire('Error', 'Fallo conexión', 'error');
@@ -5562,8 +5564,16 @@ function abrirModalArqueo30Seg() {
 
     gastosHistory.forEach(g => {
         tGastosUsd += g.montoUsd || 0;
-        if (g.moneda === 'USD') espEfUsd -= (g.montoOriginal || g.montoUsd || 0);
-        else espEfBs -= (g.montoOriginal || (g.montoUsd * tasa) || 0);
+        const origen = String(g.origen || '').toLowerCase();
+        const montoOrig = parseFloat(g.montoOriginal || g.montoUsd || 0);
+        if (origen.includes('pago móvil') || origen.includes('pago movil') || origen.includes('banco')) {
+            espPMBs -= (g.moneda === 'BS' ? montoOrig : montoOrig * tasa);
+        } else if (origen.includes('efectivo bs')) {
+            espEfBs -= (g.moneda === 'BS' ? montoOrig : montoOrig * tasa);
+        } else {
+            // Por defecto: Gaveta Efectivo USD
+            espEfUsd -= (g.moneda === 'USD' ? montoOrig : (tasa > 0 ? montoOrig / tasa : 0));
+        }
     });
 
     abonosHistory.forEach(a => {
@@ -5736,12 +5746,18 @@ function imprimirArqueoCorteZ() {
         logoHtml = `<div style="text-align:center; margin-bottom: 5px;"><img src="${storeConfig.logo}" style="max-height: 50px; width: auto; filter: grayscale(100%);"></div>`;
     }
 
+    const is58mm = (storeConfig && storeConfig.ticketWidth === '58mm');
+    const ticketW = is58mm ? '58mm' : '80mm';
+    const containerStyle = is58mm
+        ? "width: 100%; max-width: 58mm; margin: 0 auto; font-family: monospace; font-size: 10px; line-height: 1.3;"
+        : "width: 100%; max-width: 300px; margin: 0 auto; font-family: monospace; font-size: 11px; line-height: 1.4;";
+
     const corteZHtml = `
-        <div style="width: 100%; max-width: 300px; margin: 0 auto; font-family: monospace; font-size: 11px; line-height: 1.4;">
+        <div style="${containerStyle}">
             ${logoHtml}
-            <h2 style="text-align:center; font-size:15px; font-weight:bold; margin-bottom: 2px;">${storeConfig.name.toUpperCase()}</h2>
-            ${storeConfig.rif ? `<p style="text-align:center; font-size:10px; margin-bottom: 3px;">RIF: ${storeConfig.rif}</p>` : ''}
-            <h3 style="text-align:center; font-size:13px; font-weight:bold; border-top: 1px dashed #000; padding-top: 4px; margin-bottom: 2px;">ARQUEO DE CAJA DIARIO (CORTE Z)</h3>
+            <h2 style="text-align:center; font-size:${is58mm ? '13px' : '15px'}; font-weight:bold; margin-bottom: 2px;">${storeConfig.name.toUpperCase()}</h2>
+            ${storeConfig.rif ? `<p style="text-align:center; font-size:9px; margin-bottom: 3px;">RIF: ${storeConfig.rif}</p>` : ''}
+            <h3 style="text-align:center; font-size:${is58mm ? '11px' : '13px'}; font-weight:bold; border-top: 1px dashed #000; padding-top: 4px; margin-bottom: 2px;">ARQUEO DE CAJA DIARIO (CORTE Z)</h3>
             <p style="text-align:center; border-bottom: 1px dashed #000; padding-bottom:4px; margin-bottom: 8px;">${fecha}<br>Cajero: ${currentUser?.email || 'Principal'}<br>Tasa BCV: ${formatBs(tasa)}</p>
 
             <h4 style="font-weight:bold; margin: 4px 0;">1. SISTEMA ESPERA:</h4>
@@ -5778,7 +5794,7 @@ function imprimirArqueoCorteZ() {
         </div>
     `;
 
-    imprimirTicketAislado(corteZHtml, { width: '80mm' });
+    imprimirTicketAislado(corteZHtml, { width: ticketW });
 }
 
 function imprimirCorteZ() {
@@ -5824,7 +5840,8 @@ function enviarArqueoWhatsApp() {
     msg += `--------------------------------\n`;
     msg += `✅ *Cierre auditado desde GestiónPro POS*`;
 
-    const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    const cleanPhone = storeConfig.phone ? normalizarTelefono(storeConfig.phone).replace(/\D/g, '') : '';
+    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
 }
 
@@ -5962,36 +5979,113 @@ async function confirmarCierreArqueo() {
     }
 }
 
+let _cierresHistoricosCache = [];
+
 function verHistorialCierres() {
     if (!isAdmin) return;
     const m = document.getElementById('cierres-modal');
     const c = document.getElementById('cierres-modal-content');
     const tbody = document.getElementById('cierres-table-body');
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500 font-bold">Cargando auditoría de cierres...</td></tr>';
     m.classList.remove('hidden');
     setTimeout(() => {
         m.classList.remove('opacity-0');
         c.classList.remove('scale-95');
     }, 10);
-    getDb('cierres').orderBy('timestamp', 'desc').limit(30).get().then(snapshot => {
+    getDb('cierres').orderBy('timestamp', 'desc').limit(40).get().then(snapshot => {
         tbody.innerHTML = '';
+        _cierresHistoricosCache = [];
         if (snapshot.empty) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500">Sin cierres</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-slate-500">No hay cierres registrados en el historial.</td></tr>';
             return;
         }
         snapshot.forEach(doc => {
-            const d = doc.data();
+            const d = { id: doc.id, ...doc.data() };
+            _cierresHistoricosCache.push(d);
+            const dif = Number(d.diferenciaUsd || 0);
+            let badgeCuadre = '<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">Exacto</span>';
+            if (dif > 0.05) {
+                badgeCuadre = `<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 dark:bg-teal-950/70 dark:text-teal-300">+${formatUSD(dif)}</span>`;
+            } else if (dif < -0.05) {
+                badgeCuadre = `<span class="text-[10px] font-black px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300">${formatUSD(dif)}</span>`;
+            }
             tbody.innerHTML += `
-                <tr class="hover:bg-slate-50 border-b border-slate-100">
-                    <td class="py-3 font-bold text-slate-700">${d.fechaStr}</td>
-                    <td class="py-3 text-slate-500">${d.cajero}</td>
-                    <td class="py-3 font-black text-emerald-600 text-right">$${(d.ventasTotalesUsd || 0).toFixed(2)}</td>
-                    <td class="py-3 font-black text-blue-600 text-right">$${(d.gananciaNetaUsd || 0).toFixed(2)}</td>
-                    <td class="py-3 text-center"><span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded">Cerrado</span></td>
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 transition-colors">
+                    <td class="py-3 font-bold text-slate-700 dark:text-slate-200 text-xs">${d.fechaStr || 'Sin fecha'}</td>
+                    <td class="py-3 text-slate-600 dark:text-slate-400 text-xs">
+                        <span class="font-extrabold text-slate-800 dark:text-slate-100 block">${d.sucursalNombre || 'Principal'}</span>
+                        <span class="text-[10px] text-slate-400">${d.cajero}</span>
+                    </td>
+                    <td class="py-3 font-black text-emerald-600 dark:text-emerald-400 text-right tabular-nums text-xs">${formatUSD(d.ventasTotalesUsd || 0)}</td>
+                    <td class="py-3 text-right tabular-nums text-xs">${badgeCuadre}</td>
+                    <td class="py-3 text-center">
+                        <button type="button" onclick="reimprimirCorteZHistorico('${doc.id}')" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-[11px] font-black border border-indigo-200 dark:border-indigo-800 shadow-2xs transition-all active:scale-95" title="Reimprimir Ticket Térmico de Corte Z">
+                            <i class="fa-solid fa-receipt mr-1"></i> Ticket Z
+                        </button>
+                    </td>
                 </tr>`;
         });
+    }).catch(err => {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-rose-500 font-bold">Error al cargar historial: ${err.message}</td></tr>`;
     });
 }
+
+function reimprimirCorteZHistorico(cierreId) {
+    const c = _cierresHistoricosCache.find(x => x.id === cierreId);
+    if (!c) return Swal.fire('Error', 'No se encontraron los datos del cierre', 'error');
+
+    const is58mm = (storeConfig && storeConfig.ticketWidth === '58mm');
+    const ticketW = is58mm ? '58mm' : '80mm';
+    const containerStyle = is58mm
+        ? "width: 100%; max-width: 58mm; margin: 0 auto; font-family: monospace; font-size: 10px; line-height: 1.3;"
+        : "width: 100%; max-width: 300px; margin: 0 auto; font-family: monospace; font-size: 11px; line-height: 1.4;";
+
+    const difUsd = Number(c.diferenciaUsd || 0);
+    const esp = c.esperado || {};
+    const fis = c.fisico || {};
+
+    const corteZHtml = `
+        <div style="${containerStyle}">
+            <h2 style="text-align:center; font-size:${is58mm ? '13px' : '15px'}; font-weight:bold; margin-bottom: 2px;">${(storeConfig.name || 'GestiónPro').toUpperCase()}</h2>
+            <h3 style="text-align:center; font-size:${is58mm ? '11px' : '13px'}; font-weight:bold; border-top: 1px dashed #000; padding-top: 4px; margin-bottom: 2px;">COPIA AUDITADA CORTE Z</h3>
+            <p style="text-align:center; border-bottom: 1px dashed #000; padding-bottom:4px; margin-bottom: 8px;">${c.fechaStr}<br>Sucursal: ${c.sucursalNombre || 'Principal'}<br>Cajero: ${c.cajero}<br>Tasa: ${formatBs(c.tasaBCV || getBcvRate())}</p>
+
+            <h4 style="font-weight:bold; margin: 4px 0;">1. SISTEMA ESPERABA:</h4>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>${formatUSD(esp.efectivoUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>${formatBs(esp.efectivoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>${formatBs(esp.puntoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>${formatBs(esp.pagoMovilBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>${formatUSD(esp.zelleUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL ESPERADO:</span><span>${formatUSD(esp.totalUsd || c.ventasTotalesUsd || 0)}</span></div>
+
+            <h4 style="font-weight:bold; margin: 8px 0 4px 0; border-top: 1px dashed #000; padding-top: 4px;">2. CONTEO FÍSICO ASENTADO:</h4>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo USD:</span><span>${formatUSD(fis.efectivoUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Efectivo Bs:</span><span>${formatBs(fis.efectivoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Punto Venta Bs:</span><span>${formatBs(fis.puntoBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Pago Móvil Bs:</span><span>${formatBs(fis.pagoMovilBs || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Zelle USD:</span><span>${formatUSD(fis.zelleUsd || 0)}</span></div>
+            <div style="display:flex; justify-content:space-between; font-weight:bold; border-top: 1px dotted #000; margin-top:2px;"><span>TOTAL FÍSICO:</span><span>${formatUSD(fis.totalUsd || 0)}</span></div>
+
+            <div style="border: 1px solid #000; padding: 4px; margin: 8px 0; text-align:center;">
+                <p style="font-weight:bold; font-size:12px;">DIFERENCIA: ${difUsd >= 0 ? '+' : ''}${formatUSD(difUsd)}</p>
+                <p style="font-size:10px;">${Math.abs(difUsd) < 0.05 ? 'CUADRE EXACTO' : (difUsd > 0 ? 'SOBRANTE' : 'FALTANTE')}</p>
+            </div>
+
+            ${c.observaciones ? `<p style="font-size:10px; margin-bottom: 5px;"><b>Obs:</b> ${c.observaciones}</p>` : ''}
+
+            <div style="border-top: 1px dashed #000; padding-top: 5px; margin-top: 5px;">
+                <div style="display:flex; justify-content:space-between;"><span>Ventas Brutas:</span><span>${formatUSD(c.ventasTotalesUsd || 0)}</span></div>
+                <div style="display:flex; justify-content:space-between;"><span>Gastos Turno:</span><span>-${formatUSD(c.totalGastosUsd || 0)}</span></div>
+                <div style="display:flex; justify-content:space-between; font-weight:bold;"><span>Ganancia Neta:</span><span>${formatUSD(c.gananciaNetaUsd || 0)}</span></div>
+            </div>
+            <br>
+            <p style="text-align:center; font-size:9px;">[COPIA REIMPRESA - GESTIÓNPRO]</p>
+        </div>
+    `;
+
+    imprimirTicketAislado(corteZHtml, { width: ticketW });
+}
+window.reimprimirCorteZHistorico = reimprimirCorteZHistorico;
 
 function closeCierresModal() {
     const m = document.getElementById('cierres-modal');
@@ -12317,3 +12411,94 @@ function cargarDemoComidaRapida() {
     cargarDemoCategorias(Object.keys(DEMO_CATEGORIAS_COMIDA));
 }
 
+
+
+// Exportación consolidada ejecutiva de la Torre de Control en Excel
+async function exportarReporteConsolidadoTorre() {
+    if (!isAdmin) return;
+    try {
+        Swal.fire({
+            title: 'Generando informe consolidado...',
+            text: 'Consolidando métricas de sucursales e inventario',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        await ensureXLSX();
+        const rate = getBcvRate();
+        const branchMetrics = holdingBranches.map(b => obtenerMetricasSucursal(b));
+
+        // 1. Hoja de Resumen Global
+        let totalVentasUsd = 0;
+        let totalGananciaUsd = 0;
+        let totalFiadosUsd = 0;
+        let totalInvUsd = 0;
+        let totalSkus = 0;
+
+        branchMetrics.forEach(m => {
+            if (m.tieneDatos) {
+                totalVentasUsd += m.ventasUsd;
+                totalGananciaUsd += m.gananciaUsd;
+                totalFiadosUsd += m.fiadosUsd;
+                totalInvUsd += m.invValUsd;
+                totalSkus += m.skus;
+            }
+        });
+
+        const resumenData = [
+            ['INFORME CONSOLIDADO EJECUTIVO — GESTIÓNPRO TORRE DE CONTROL'],
+            ['Fecha de Emisión', new Date().toLocaleString('es-VE')],
+            ['Tasa Oficial BCV', formatBs(rate)],
+            ['Total Sucursales Registradas', holdingBranches.length],
+            [],
+            ['MÉTRICA GLOBAL', 'VALOR USD', 'VALOR BOLÍVARES (BCV)'],
+            ['Ventas del Día Consolidadas', totalVentasUsd, roundMoney(totalVentasUsd * rate)],
+            ['Utilidad / Ganancia Estimada', totalGananciaUsd, roundMoney(totalGananciaUsd * rate)],
+            ['Cuentas por Cobrar (Fiados en Calle)', totalFiadosUsd, roundMoney(totalFiadosUsd * rate)],
+            ['Inventario Valorado en Red', totalInvUsd, roundMoney(totalInvUsd * rate)],
+            ['Total Variedad de Productos (SKUs)', totalSkus, '']
+        ];
+
+        // 2. Hoja de Detalle por Sucursales
+        const sucursalesData = [
+            ['ID Sucursal', 'Nombre Comercial', 'Dirección', 'Cajero en Turno', 'Estado de Caja', 'Ventas Hoy ($)', 'Ventas Hoy (Bs)', 'Fiados ($)', 'Inventario Valorado ($)', 'Cant. SKUs']
+        ];
+
+        branchMetrics.forEach(m => {
+            sucursalesData.push([
+                m.id,
+                m.nombre,
+                m.direccion || 'Principal',
+                m.cajero || 'Sin asignar',
+                m.estado,
+                m.tieneDatos ? m.ventasUsd : 'Sin datos locales',
+                m.tieneDatos ? roundMoney(m.ventasUsd * rate) : '',
+                m.tieneDatos ? m.fiadosUsd : '',
+                m.tieneDatos ? m.invValUsd : '',
+                m.tieneDatos ? m.skus : ''
+            ]);
+        });
+
+        const wb = XLSX.utils.book_new();
+        const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+        const wsSucursales = XLSX.utils.aoa_to_sheet(sucursalesData);
+
+        XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen Ejecutivo');
+        XLSX.utils.book_append_sheet(wb, wsSucursales, 'Detalle Sucursales');
+
+        const fechaArchivo = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(wb, `Consolidado_Torre_Control_${fechaArchivo}.xlsx`);
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Reporte Generado',
+            text: 'El informe consolidado se descargó con éxito.',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    } catch (err) {
+        console.error('Error al exportar consolidado:', err);
+        Swal.fire('Error', 'No se pudo generar el reporte consolidado: ' + err.message, 'error');
+    }
+}
+window.exportarReporteConsolidadoTorre = exportarReporteConsolidadoTorre;

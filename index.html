@@ -1220,6 +1220,9 @@
                                 <button type="button" onclick="abrirModalNuevaSucursal()" class="animated-btn bg-primary-600 hover:bg-primary-500 text-white px-3.5 py-2.5 rounded-xl font-black shadow-md shadow-primary-600/25 flex items-center gap-2 text-xs transition-all">
                                     <i class="fa-solid fa-store text-xs"></i> + Nueva Sucursal
                                 </button>
+                                <button type="button" onclick="exportarReporteConsolidadoTorre()" class="animated-btn bg-slate-800 hover:bg-slate-700 text-white px-3.5 py-2.5 rounded-xl font-black shadow-md flex items-center gap-2 text-xs transition-all" title="Descargar informe consolidado de la red en Excel">
+                                    <i class="fa-solid fa-file-excel text-emerald-400"></i> Exportar Consolidado
+                                </button>
                                 <button type="button" onclick="actualizarTorreControl()" class="bg-white/80 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700/80 text-xs shadow-xs transition-all" title="Recargar datos de todas las sucursales">
                                     <i class="fa-solid fa-rotate-right"></i>
                                 </button>
@@ -2066,6 +2069,7 @@
                         <option value="Insumos y Limpieza">🧹 Insumos / Art. Limpieza</option>
                         <option value="Mantenimiento">🔧 Mantenimiento / Reparaciones</option>
                         <option value="Pago Proveedor Menor">📦 Pago a Proveedor Menor</option>
+                        <option value="Retiro de Ganancia / Anticipo de Dueño">💼 Retiro de Ganancia / Anticipo de Dueño</option>
                         <option value="Otros Gastos">📌 Otros Gastos Menores</option>
                     </select>
                 </div>
@@ -2080,6 +2084,10 @@
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase ml-1 mb-1">Concepto o Motivo</label>
                     <input type="text" id="gasto-concepto" placeholder="Ej. Pago taxi entrega mercancía" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase ml-1 mb-1">N° Comprobante / Referencia (Opcional)</label>
+                    <input type="text" id="gasto-comprobante" placeholder="Ej. Fact #4521 o Ref 98214" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium text-sm">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase ml-1 mb-1">Monto y Moneda</label>
@@ -2218,7 +2226,7 @@
             </div>
             <div class="overflow-y-auto flex-1 pr-2">
                 <table class="w-full text-left text-sm">
-                    <thead><tr class="text-slate-400 text-xs uppercase border-b border-slate-100"><th class="pb-3">Fecha y Hora</th><th class="pb-3">Cajero</th><th class="pb-3 text-right">Ventas Totales</th><th class="pb-3 text-right">Ganancia Neta</th><th class="pb-3 text-center">Ticket Z</th></tr></thead>
+                    <thead><tr class="text-slate-400 text-xs uppercase border-b border-slate-100"><th class="pb-3">Fecha y Hora</th><th class="pb-3">Sucursal / Cajero</th><th class="pb-3 text-right">Ventas Totales</th><th class="pb-3 text-right">Cuadre / Dif.</th><th class="pb-3 text-center">Ticket Z</th></tr></thead>
                     <tbody id="cierres-table-body" class="divide-y divide-slate-100"></tbody>
                 </table>
             </div>
