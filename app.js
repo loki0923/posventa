@@ -738,6 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchRates();
         setupBarcodeScanner();
         setupKeyboardShortcuts();
+        syncThemeIcon();
 
         // Si hay ventas offline en cola pendientes al iniciar sesión y hay conexión, sincronizar
         if (navigator.onLine && offlineSalesQueue.length > 0) {
@@ -1342,14 +1343,26 @@ function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplic
 // =====================================================
 // TEMA Y UTILIDADES
 // =====================================================
+function syncThemeIcon() {
+    const isDark = document.documentElement.classList.contains('dark');
+    const icon = document.getElementById('theme-icon');
+    if (icon) {
+        icon.className = isDark ? 'fa-solid fa-sun text-amber-400 text-xs' : 'fa-solid fa-moon text-slate-600 dark:text-amber-400 text-xs';
+    }
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+        metaTheme.setAttribute('content', isDark ? '#07090e' : '#ffffff');
+    }
+}
+window.syncThemeIcon = syncThemeIcon;
+
 function toggleTheme() {
     document.documentElement.classList.toggle('dark');
     const isDark = document.documentElement.classList.contains('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    syncThemeIcon();
     const activeTabCharts = document.querySelector('.tab-content.active')?.id?.replace('tab-', '') || 'ventas';
     if (activeTabCharts === 'reportes' && typeof updateDashboardCharts === 'function') updateDashboardCharts();
-    const icon = document.getElementById('theme-icon');
-    if (icon) icon.className = isDark ? 'fa-solid fa-sun text-amber-400 text-sm' : 'fa-solid fa-moon text-slate-600 text-sm';
 }
 
 function renderBancos() {
