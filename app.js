@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v27 · 31/10/2026 · bloque a: correccion tasa bcv y blindaje divisiones';
+const APP_VERSION = 'v28 · 31/10/2026 · bloque b: seguridad xss puertas traseras y proyeccion publica';
 
 function pintarVersionApp() {
     try {
@@ -308,6 +308,18 @@ function formatQty(qty, tipo) {
 }
 window.formatQty = formatQty;
 
+
+// Helper para sanitizar cadenas contra ataques XSS almacenados
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+window.escapeHtml = escapeHtml;
 
 function roundMoney(num) {
     return Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
@@ -2604,6 +2616,38 @@ function editProduct(id) {
         c.classList.remove('scale-95');
     }, 10);
 }
+
+
+// Sincroniza la proyección pública segura para catalogo.html (sin costos ni stock confidencial)
+async function sincronizarCatalogoPublico() {
+    if (!isAdmin || !currentNegocioId) return;
+    try {
+        const batch = db.batch();
+        let ops = 0;
+        products.forEach(p => {
+            if (p && p.id && ops < 400) {
+                const pubRef = getDb('products_public').doc(p.id);
+                batch.set(pubRef, {
+                    nombre: p.nombre,
+                    marca: p.marca || '',
+                    categoria: p.categoria || 'General',
+                    precio: parseFloat(p.precio) || 0,
+                    tipo: p.tipo || 'unidad',
+                    imagen: p.imagen || '',
+                    disponible: (parseFloat(p.stock) > 0),
+                    activo: p.activo !== false,
+                    updatedAt: new Date().toISOString()
+                }, { merge: true });
+                ops++;
+            }
+        });
+        if (ops > 0) await batch.commit();
+        console.log(`Catálogo público sincronizado (${ops} productos proyectados sin costos)`);
+    } catch (e) {
+        console.warn('Error sincronizando catálogo público:', e);
+    }
+}
+window.sincronizarCatalogoPublico = sincronizarCatalogoPublico;
 
 function deleteProduct(id) {
     if (!isAdmin) return;
@@ -5182,7 +5226,7 @@ function generateReceipt(s) {
     const receiptHtml = `
         <div style="text-align:center; margin-bottom:10px; border-bottom:1px dashed #000; padding-bottom:10px; font-family: 'Courier New', Courier, monospace; color: black;">
             ${logoHtml}
-            <h2 style="margin:0; font-size:18px; font-weight:900; text-transform:uppercase;">${storeConfig.name}</h2>
+            <h2 style="margin:0; font-size:18px; font-weight:900; text-transform:uppercase;">${escapeHtml(storeConfig.name)}</h2>
             ${storeConfig.rif ? `<p style="margin:0; font-size:12px; font-weight:bold;">RIF: ${storeConfig.rif}</p>` : ''}
             <p style="margin:4px 0 0 0; font-size:12px; font-weight:bold;">TICKET DE VENTA</p>
             <p style="margin:4px 0 0 0; font-size:11px;">Ref: #${(s.numeroFactura || s.id.slice(-6)).toUpperCase()}</p>
@@ -5816,7 +5860,7 @@ function imprimirArqueoCorteZ() {
     const corteZHtml = `
         <div style="${containerStyle}">
             ${logoHtml}
-            <h2 style="text-align:center; font-size:${is58mm ? '13px' : '15px'}; font-weight:bold; margin-bottom: 2px;">${storeConfig.name.toUpperCase()}</h2>
+            <h2 style="text-align:center; font-size:${is58mm ? '13px' : '15px'}; font-weight:bold; margin-bottom: 2px;">${escapeHtml(storeConfig.name.toUpperCase())}</h2>
             ${storeConfig.rif ? `<p style="text-align:center; font-size:9px; margin-bottom: 3px;">RIF: ${storeConfig.rif}</p>` : ''}
             <h3 style="text-align:center; font-size:${is58mm ? '11px' : '13px'}; font-weight:bold; border-top: 1px dashed #000; padding-top: 4px; margin-bottom: 2px;">ARQUEO DE CAJA DIARIO (CORTE Z)</h3>
             <p style="text-align:center; border-bottom: 1px dashed #000; padding-bottom:4px; margin-bottom: 8px;">${fecha}<br>Cajero: ${currentUser?.email || 'Principal'}<br>Tasa BCV: ${formatBs(tasa)}</p>
@@ -8530,7 +8574,13 @@ function getStoreCatalogUrl() {
     let path = window.location.pathname;
     if (path.endsWith('index.html')) path = path.slice(0, -10);
     else if (!path.endsWith('/')) path = path.substring(0, path.lastIndexOf('/') + 1);
-    const negocioParam = currentNegocioId || 'bodega-demo';
+    const negocioParam = currentNegocioId || '';
+    if (!negocioParam) {
+        if (typeof Swal !== 'undefined' && Swal.fire) {
+            Swal.fire('Atención', 'No se ha detectado el identificador de tu negocio. Inicia sesión para compartir tu catálogo.', 'warning');
+        }
+        return '';
+    }
     return `${origin}${path}catalogo.html?negocio=${encodeURIComponent(negocioParam)}`;
 }
 
@@ -9003,7 +9053,7 @@ function imprimirLibroVentas() {
     const libroHtml = `
         <div style="font-family: Arial, sans-serif; font-size: 11px; padding: 10px; width: 100%;">
             <div style="text-align: center; margin-bottom: 15px; border-bottom: 2px solid #000; padding-bottom: 10px;">
-                <h2 style="margin: 0; font-size: 16px;">${storeConfig.name.toUpperCase()}</h2>
+                <h2 style="margin: 0; font-size: 16px;">${escapeHtml(storeConfig.name.toUpperCase())}</h2>
                 <p style="margin: 2px 0;">RIF: ${storeConfig.rif || 'J-00000000-0'}</p>
                 <h3 style="margin: 5px 0 0 0; font-size: 13px;">REGISTRO DE VENTAS (REFERENCIAL)</h3>
                 <p style="margin: 2px 0; font-size: 8px; color: #666;">Control administrativo interno. No sustituye la facturación fiscal oficial autorizada por el SENIAT.</p>
@@ -11534,7 +11584,7 @@ function onBusinessTypeChange(type) {
         }
         if (lblNombre) lblNombre.textContent = 'Nombre Comercial';
         if (inputNombre) inputNombre.placeholder = 'Ej. Bodega La Bendición';
-        if (inputEmail) inputEmail.placeholder = 'admin@bodega.com';
+        if (inputEmail) inputEmail.placeholder = 'admin@minegocio.com';
     }
 }
 

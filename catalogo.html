@@ -471,12 +471,12 @@
 
         // Parámetro de URL para negocioId (soporta ?negocio= o ?id=)
         const urlParams = new URLSearchParams(window.location.search);
-        const negocioIdCrudo = urlParams.get('negocio') || urlParams.get('id') || 'bodega-demo';
+        const negocioIdCrudo = urlParams.get('negocio') || urlParams.get('id') || '';
         const negocioId = negocioIdValido(negocioIdCrudo) ? negocioIdCrudo : '';
 
         let productsList = [];
         let catalogCart = [];
-        let tasaBcv = 36.50;
+        let tasaBcv = 0;
         let storeData = {
             name: 'Bodega & Víveres',
             rif: '',
@@ -602,13 +602,14 @@
         }
 
         function cargarProductos() {
-            db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snap) => {
+            function procesarSnapProductos(snap) {
                 productsList = [];
                 const catSet = new Set();
                 snap.forEach(doc => {
                     const p = { id: doc.id, ...doc.data() };
-                    // Filtrar solo productos con stock disponible
-                    if (parseFloat(p.stock) > 0) {
+                    // Proyección pública usa 'disponible: true' o 'activo !== false'; products privado usa 'stock > 0'
+                    const estaDisponible = (p.disponible !== undefined) ? (p.disponible === true && p.activo !== false) : (parseFloat(p.stock) > 0);
+                    if (estaDisponible) {
                         productsList.push(p);
                         if (p.categoria) catSet.add(p.categoria);
                     }
@@ -617,15 +618,41 @@
                 document.getElementById('products-loading').classList.add('hidden');
                 renderCategorias(Array.from(catSet));
                 filtrarProductos();
+            }
+
+            function mostrarErrorCarga() {
+                const el = document.getElementById('products-loading');
+                if (el) {
+                    el.innerHTML = `
+                        <div class="p-6 bg-amber-50 border border-amber-200 rounded-3xl max-w-sm mx-auto text-amber-800 shadow-sm">
+                            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-600"></i>
+                            <p class="font-bold text-xs">No se pudo cargar el catálogo de este negocio.</p>
+                            <p class="text-[11px] text-amber-700 mt-1">Verifica el enlace o contacta directamente a la tienda.</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // 1. Intentar cargar la proyección pública (products_public, segura sin exponer costos ni inventario interno)
+            db.collection('negocios').doc(negocioId).collection('products_public').onSnapshot((snapPublic) => {
+                if (snapPublic && !snapPublic.empty) {
+                    procesarSnapProductos(snapPublic);
+                    return;
+                }
+                // 2. Fallback de migración: leer de products si aún no existe proyección pública
+                db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snapPriv) => {
+                    procesarSnapProductos(snapPriv);
+                }, (err) => {
+                    console.error("Error al cargar productos fallback:", err);
+                    mostrarErrorCarga();
+                });
             }, (err) => {
-                console.error("Error al cargar productos del catálogo:", err);
-                document.getElementById('products-loading').innerHTML = `
-                    <div class="p-6 bg-amber-50 border border-amber-200 rounded-3xl max-w-sm mx-auto text-amber-800 shadow-sm">
-                        <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-600"></i>
-                        <p class="font-bold text-xs">No se pudo cargar el catálogo de este negocio.</p>
-                        <p class="text-[11px] text-amber-700 mt-1">Verifica el enlace o contacta directamente a la tienda.</p>
-                    </div>
-                `;
+                db.collection('negocios').doc(negocioId).collection('products').onSnapshot((snapPriv) => {
+                    procesarSnapProductos(snapPriv);
+                }, (err2) => {
+                    console.error("Error al cargar productos:", err2);
+                    mostrarErrorCarga();
+                });
             });
         }
 

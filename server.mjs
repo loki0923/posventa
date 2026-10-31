@@ -75,11 +75,15 @@ const server = http.createServer((req, res) => {
                         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
                         return res.end('Archivo no encontrado');
                     }
+                    let out = indexData.toString('utf8');
+                    if (process.env.DEMO_MODE !== 'true') {
+                        out = out.replace(/<button[^>]*id="btn-demo-credentials"[\s\S]*?<\/button>/gi, '');
+                    }
                     res.writeHead(200, {
                         'Content-Type': 'text/html; charset=utf-8',
                         'Cache-Control': 'no-cache, no-store, must-revalidate'
                     });
-                    res.end(indexData);
+                    res.end(out);
                 });
                 return;
             }
@@ -103,6 +107,33 @@ const server = http.createServer((req, res) => {
             // Compresión Gzip para archivos de texto y código si el cliente lo soporta
             const acceptEncoding = req.headers['accept-encoding'] || '';
             const shouldGzip = COMPRESSIBLE_EXTS.has(ext) && acceptEncoding.includes('gzip');
+
+            // Procesamiento de index.html servido para garantizar que credenciales demo NO se sirvan en prod
+            if (pathname === '/index.html') {
+                fs.readFile(safePath, 'utf8', (readErr, htmlStr) => {
+                    if (readErr) {
+                        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+                        return res.end('Error al leer index.html');
+                    }
+                    if (process.env.DEMO_MODE !== 'true') {
+                        htmlStr = htmlStr.replace(/<button[^>]*id="btn-demo-credentials"[\s\S]*?<\/button>/gi, '');
+                    }
+                    const outBuf = Buffer.from(htmlStr, 'utf8');
+                    if (shouldGzip) {
+                        headers['Content-Encoding'] = 'gzip';
+                        headers['Vary'] = 'Accept-Encoding';
+                        res.writeHead(200, headers);
+                        zlib.gzip(outBuf, { level: 6 }, (gzErr, gzBuf) => {
+                            if (gzErr) return res.end(outBuf);
+                            res.end(gzBuf);
+                        });
+                    } else {
+                        res.writeHead(200, headers);
+                        res.end(outBuf);
+                    }
+                });
+                return;
+            }
 
             if (shouldGzip) {
                 headers['Content-Encoding'] = 'gzip';

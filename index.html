@@ -554,7 +554,6 @@
                     </div>
                 </div>
                 <button type="submit" id="btn-login" class="w-full animated-btn bg-gradient-to-r from-primary-500 via-indigo-500 to-purple-600 hover:from-primary-600 hover:to-purple-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-primary-500/30 mt-4 flex items-center justify-center gap-2 text-sm tracking-wide">Entrar al Sistema <i class="fa-solid fa-arrow-right text-xs"></i></button>
-                <button type="button" id="btn-demo-credentials" onclick="cargarDemoLogin()" class="w-full py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 hidden"><i class="fa-solid fa-key text-[11px] text-amber-400"></i> Autocompletar Credenciales de Prueba</button>
             </form>
 
             <!-- FORM REGISTER -->
@@ -588,7 +587,7 @@
                 </div>
                 <div>
                     <label class="block text-[10px] font-black text-slate-300 uppercase tracking-wider mb-1 ml-1">Correo Administrador</label>
-                    <input type="email" id="reg-email" required class="w-full px-4 py-3 bg-slate-800/60 border border-slate-700/80 rounded-2xl focus:bg-slate-800 focus:border-emerald-400 outline-none text-white text-sm font-medium" placeholder="admin@bodega.com">
+                    <input type="email" id="reg-email" required class="w-full px-4 py-3 bg-slate-800/60 border border-slate-700/80 rounded-2xl focus:bg-slate-800 focus:border-emerald-400 outline-none text-white text-sm font-medium" placeholder="admin@minegocio.com">
                 </div>
                 <div>
                     <label class="block text-[10px] font-black text-slate-300 uppercase tracking-wider mb-1 ml-1">Contraseña</label>
@@ -3544,7 +3543,7 @@
          indexa por URL completa, así que una URL con query nueva es un fallo de
          caché y va a la red. Sin esto, un sw.js viejo sigue sirviendo el app.js
          viejo indefinidamente. Súbelo junto con CACHE_NAME en sw.js. -->
-    <script src="app.js?v=27"></script>
+    <script src="app.js?v=28"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
