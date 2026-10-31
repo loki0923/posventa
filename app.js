@@ -114,6 +114,107 @@ function clearActiveListeners() {
 // =====================================================
 // MOTOR CENTRAL DE MONEDA Y CONVERSIÓN BIMONETARIA
 // =====================================================
+// =====================================================
+// CARGA DINÁMICA BAJO DEMANDA (LAZY LOADING) DE LIBRERÍAS
+// =====================================================
+const _loadedScripts = new Set();
+
+function lazyLoadScript(src) {
+    if (_loadedScripts.has(src) || (typeof document !== 'undefined' && document.querySelector(`script[src="${src}"]`))) {
+        return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => {
+            _loadedScripts.add(src);
+            resolve();
+        };
+        s.onerror = (err) => reject(new Error(`Error al cargar ${src}`));
+        document.head.appendChild(s);
+    });
+}
+
+async function ensureChartJs() {
+    if (typeof Chart !== 'undefined') return;
+    await lazyLoadScript('https://cdn.jsdelivr.net/npm/chart.js');
+}
+
+async function ensureXLSX() {
+    if (typeof XLSX !== 'undefined') return;
+    await lazyLoadScript('https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js');
+}
+
+async function ensureHtml5Qrcode() {
+    if (typeof Html5Qrcode !== 'undefined') return;
+    await lazyLoadScript('https://unpkg.com/html5-qrcode');
+}
+
+// =====================================================
+// ALMACENAMIENTO RESILIENTE INDEXEDDB (COLA OFFLINE)
+// =====================================================
+const IDB_NAME = 'GestionProDB';
+const IDB_VERSION = 1;
+const IDB_STORE_SALES = 'offline_sales';
+
+function openIndexedDB() {
+    return new Promise((resolve) => {
+        if (typeof window === 'undefined' || !('indexedDB' in window)) return resolve(null);
+        try {
+            const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+            req.onupgradeneeded = (e) => {
+                const idb = e.target.result;
+                if (!idb.objectStoreNames.contains(IDB_STORE_SALES)) {
+                    idb.createObjectStore(IDB_STORE_SALES, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => resolve(null);
+        } catch (e) {
+            resolve(null);
+        }
+    });
+}
+
+async function guardarVentaOfflineIndexedDB(sale) {
+    try {
+        const idb = await openIndexedDB();
+        if (!idb) return;
+        const tx = idb.transaction(IDB_STORE_SALES, 'readwrite');
+        const store = tx.objectStore(IDB_STORE_SALES);
+        store.put(sale);
+    } catch (e) {
+        console.warn('Fallback a localStorage para venta offline:', e);
+    }
+}
+
+async function eliminarVentaOfflineIndexedDB(saleId) {
+    try {
+        const idb = await openIndexedDB();
+        if (!idb) return;
+        const tx = idb.transaction(IDB_STORE_SALES, 'readwrite');
+        const store = tx.objectStore(IDB_STORE_SALES);
+        store.delete(saleId);
+    } catch (e) {}
+}
+
+async function recuperarVentasOfflineIndexedDB() {
+    try {
+        const idb = await openIndexedDB();
+        if (!idb) return [];
+        return new Promise((resolve) => {
+            const tx = idb.transaction(IDB_STORE_SALES, 'readonly');
+            const store = tx.objectStore(IDB_STORE_SALES);
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
 
 // Metadatos de la tasa BCV
 let rateMetadata = {
@@ -474,8 +575,18 @@ function leerSesionLocal(uid) {
 // INICIALIZACIÓN Y MOTOR OFFLINE
 // =====================================================
 async function checkDemoMode() {
+    // Si la respuesta tarda más de 2 segundos, mostrar aviso explicativo amigable de cold-start en Render
+    const coldTimer = setTimeout(() => {
+        const banner = document.getElementById('render-coldstart-banner');
+        if (banner) banner.classList.remove('hidden');
+    }, 2000);
+
     try {
         const res = await fetch('/api/config');
+        clearTimeout(coldTimer);
+        const banner = document.getElementById('render-coldstart-banner');
+        if (banner) banner.classList.add('hidden');
+
         if (res.ok) {
             const cfg = await res.json();
             if (cfg && cfg.demoMode === true) {
@@ -485,7 +596,9 @@ async function checkDemoMode() {
             }
         }
     } catch (e) {
-        // En caso de fallo o modo offline, mantener botón oculto o removerlo
+        clearTimeout(coldTimer);
+        const banner = document.getElementById('render-coldstart-banner');
+        if (banner) banner.classList.add('hidden');
     }
     const btn = document.getElementById('btn-demo-credentials');
     if (btn) btn.remove();
@@ -632,7 +745,8 @@ function loadCachedData() {
         if (Array.isArray(cachedProducts) && cachedProducts.length) {
             products = cachedProducts;
             renderPOSProducts();
-            if (isAdmin && typeof renderInventory === 'function') renderInventory();
+            const activeTab = document.querySelector('.tab-content.active')?.id?.replace('tab-', '') || 'ventas';
+    if (isAdmin && activeTab === 'inventario' && typeof renderInventory === 'function') renderInventory();
         }
         const cachedClientes = leerCache('clientes');
         if (Array.isArray(cachedClientes) && cachedClientes.length) {
@@ -660,6 +774,22 @@ function loadCachedData() {
         }
         // La cola de ventas pendientes también pertenece a ESTE usuario.
         offlineSalesQueue = leerCache('offline_sales_queue') || [];
+    recuperarVentasOfflineIndexedDB().then(idbSales => {
+        if (idbSales && idbSales.length > 0) {
+            const currentIds = new Set(offlineSalesQueue.map(s => s && s.id));
+            let added = false;
+            idbSales.forEach(s => {
+                if (s && s.id && !currentIds.has(s.id)) {
+                    offlineSalesQueue.push(s);
+                    added = true;
+                }
+            });
+            if (added) {
+                guardarCache('offline_sales_queue', offlineSalesQueue);
+                updateNetworkStatusUI();
+            }
+        }
+    }).catch(() => {});
         updateNetworkStatusUI();
     } catch (e) {
         console.warn('Error al cargar datos locales en caché:', e);
@@ -1034,6 +1164,7 @@ async function sincronizarVentasOffline(manual = false) {
         const idsConfirmados = new Set(sincronizadas.map(s => s.id));
         offlineSalesQueue = offlineSalesQueue.filter(s => s && !idsConfirmados.has(s.id));
         guardarCache('offline_sales_queue', offlineSalesQueue);
+        idsConfirmados.forEach(id => eliminarVentaOfflineIndexedDB(id));
 
         if (sincronizadas.length > 0) {
             storeConfig.nroFactura = maxFactura;
@@ -1136,9 +1267,10 @@ function procesarVentaOffline(saleDataRaw, cartItems, clienteId, saldoFavorAplic
         offlineCreatedAt: new Date().toISOString()
     };
 
-    // 5. Agregar a cola offline persistente
+    // 5. Agregar a cola offline persistente (Doble capa: localStorage + IndexedDB)
     offlineSalesQueue.push(offlineSale);
     guardarCache('offline_sales_queue', offlineSalesQueue);
+    guardarVentaOfflineIndexedDB(offlineSale);
 
     // 6. Agregar a historial local en memoria para ver reflejado en dashboard
     salesHistory.unshift(offlineSale);
@@ -1201,7 +1333,8 @@ function toggleTheme() {
     document.documentElement.classList.toggle('dark');
     const isDark = document.documentElement.classList.contains('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
-    if (typeof updateDashboardCharts === 'function') updateDashboardCharts();
+    const activeTabCharts = document.querySelector('.tab-content.active')?.id?.replace('tab-', '') || 'ventas';
+    if (activeTabCharts === 'reportes' && typeof updateDashboardCharts === 'function') updateDashboardCharts();
     const icon = document.getElementById('theme-icon');
     if (icon) icon.className = isDark ? 'fa-solid fa-sun text-amber-400 text-sm' : 'fa-solid fa-moon text-slate-600 text-sm';
 }
@@ -1481,6 +1614,19 @@ function switchTab(tabId) {
         btn.classList.add('active');
         btn.classList.remove('hover:bg-white/50');
     }
+    // Carga bajo demanda (Lazy Load) de módulos pesados al activar la pestaña
+    if (tabId === 'inventario' && typeof renderInventory === 'function') renderInventory();
+    if (tabId === 'reportes') {
+        if (typeof renderReportes === 'function') renderReportes();
+        ensureChartJs().then(() => {
+            if (typeof updateDashboardCharts === 'function') updateDashboardCharts();
+        }).catch(err => console.warn('Chart.js no disponible:', err));
+    }
+    if (tabId === 'compras') {
+        if (typeof renderProveedores === 'function') renderProveedores();
+        if (typeof renderOrdenesCompra === 'function') renderOrdenesCompra();
+    }
+    if (tabId === 'libro-fiscal' && typeof calcularLibroVentas === 'function') calcularLibroVentas();
     if (tabId === 'mermas') populateMermasSelect();
     if (tabId === 'fiados') renderCuadernoFiados();
     if (tabId === 'clientes') renderClientes();
@@ -2621,7 +2767,14 @@ async function openCameraScanner() {
         if (content) content.classList.remove('scale-95');
     }, 10);
     if (typeof Html5Qrcode === 'undefined') {
-        document.getElementById('camera-reader').innerHTML = '<p class="text-rose-400 p-4">Librería no disponible.</p>';
+        try {
+            await ensureHtml5Qrcode();
+        } catch (err) {
+            console.warn('Fallo cargando Html5Qrcode:', err);
+        }
+    }
+    if (typeof Html5Qrcode === 'undefined') {
+        document.getElementById('camera-reader').innerHTML = '<p class="text-rose-400 p-4">Librería de cámara no disponible.</p>';
         return;
     }
     try {
@@ -2660,6 +2813,40 @@ async function closeCameraScanner() {
     }
 }
 
+
+// =====================================================
+// ÍNDICE LOCAL Y MOTOR DE BÚSQUEDA OPTIMIZADO (DEBOUNCE 150ms)
+// =====================================================
+let _searchDebounceTimer = null;
+let _posSearchIndex = [];
+let _posRenderLimit = 60; // Renderizado por bloques para evitar saturar el DOM
+
+// Función para normalizar texto (sin tildes, minúsculas, espacios recortados)
+function normalizarTextoBusqueda(str) {
+    if (!str) return '';
+    return String(str)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+}
+
+// Reconstruye el índice de búsqueda en memoria cuando cambia el inventario
+function actualizarIndiceBusquedaPOS() {
+    _posSearchIndex = (products || []).map(p => {
+        const nom = normalizarTextoBusqueda(p.nombre);
+        const cat = normalizarTextoBusqueda(p.categoria);
+        const cod = normalizarTextoBusqueda(p.codigo);
+        const marca = normalizarTextoBusqueda(p.marca);
+        return {
+            id: p.id,
+            normText: `${nom} ${cat} ${cod} ${marca}`,
+            categoria: p.categoria || 'General',
+            product: p
+        };
+    });
+}
+
 function setupBarcodeScanner() {
     const input = document.getElementById('search-pos');
     if (!input) return;
@@ -2675,23 +2862,29 @@ function setupBarcodeScanner() {
             }
         }
     });
-    input.addEventListener('input', (e) => triggerSearch(e.target.value.toLowerCase()));
-}
 
-function triggerSearch(t) {
-    const cards = document.getElementById('pos-products-grid')?.children;
-    if (!cards) return;
-    products.forEach((p, i) => {
-        if (cards[i]) {
-            const nom = (p.nombre || '').toLowerCase();
-            const cat = (p.categoria || '').toLowerCase();
-            const cod = (p.codigo || '').toLowerCase();
-            const matchesText = !t || (nom.includes(t) || cat.includes(t) || cod.includes(t));
-            const matchesCat = (currentPOSCategory === 'Todos') || (p.categoria === currentPOSCategory);
-            cards[i].style.display = (matchesText && matchesCat) ? 'flex' : 'none';
-        }
+    // Debounce de 150 ms para tecleo fluido en celular y computadoras modestas
+    input.addEventListener('input', (e) => {
+        clearTimeout(_searchDebounceTimer);
+        const query = e.target.value;
+        _searchDebounceTimer = setTimeout(() => {
+            triggerSearch(query);
+        }, 150);
     });
 }
+
+function triggerSearch(queryRaw) {
+    const query = normalizarTextoBusqueda(queryRaw);
+    renderPOSProductsConFiltro(query, currentPOSCategory);
+}
+
+function filterPOSByCategory(catEncoded) {
+    currentPOSCategory = decodeURIComponent(catEncoded);
+    renderPOSCategoryChips();
+    const searchVal = document.getElementById('search-pos')?.value || '';
+    triggerSearch(searchVal);
+}
+window.filterPOSByCategory = filterPOSByCategory;
 
 function renderPOSCategoryChips() {
     const container = document.getElementById('pos-category-chips');
@@ -2713,34 +2906,49 @@ function renderPOSCategoryChips() {
 }
 window.renderPOSCategoryChips = renderPOSCategoryChips;
 
-function filterPOSByCategory(catEncoded) {
-    currentPOSCategory = decodeURIComponent(catEncoded);
-    renderPOSCategoryChips();
-    
-    const searchVal = document.getElementById('search-pos')?.value.toLowerCase().trim() || '';
-    const cards = document.getElementById('pos-products-grid')?.children;
-    if (!cards) return;
-    
-    products.forEach((p, i) => {
-        if (cards[i]) {
-            const nom = (p.nombre || '').toLowerCase();
-            const cat = (p.categoria || '').toLowerCase();
-            const cod = (p.codigo || '').toLowerCase();
-            const matchesText = !searchVal || (nom.includes(searchVal) || cat.includes(searchVal) || cod.includes(searchVal));
-            const matchesCat = (currentPOSCategory === 'Todos') || (p.categoria === currentPOSCategory);
-            cards[i].style.display = (matchesText && matchesCat) ? 'flex' : 'none';
-        }
-    });
-}
-window.filterPOSByCategory = filterPOSByCategory;
-
 function renderPOSProducts() {
+    actualizarIndiceBusquedaPOS();
+    renderPOSCategoryChips();
+    const searchVal = document.getElementById('search-pos')?.value || '';
+    renderPOSProductsConFiltro(normalizarTextoBusqueda(searchVal), currentPOSCategory);
+}
+
+function renderPOSProductsConFiltro(queryNorm = '', categoriaFiltro = 'Todos') {
     const grid = document.getElementById('pos-products-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    renderPOSCategoryChips();
-    const currentBcv = getBcvRate();
-    products.forEach(p => {
+
+    // Filtrar con el índice rápido en memoria
+    let filtrados = [];
+    if (!_posSearchIndex || _posSearchIndex.length !== products.length) {
+        actualizarIndiceBusquedaPOS();
+    }
+
+    _posSearchIndex.forEach(item => {
+        const matchCat = (categoriaFiltro === 'Todos') || (item.categoria === categoriaFiltro);
+        const matchText = !queryNorm || item.normText.includes(queryNorm);
+        if (matchCat && matchText) {
+            filtrados.push(item.product);
+        }
+    });
+
+    if (filtrados.length === 0) {
+        grid.innerHTML = `
+            <div class="col-span-full py-12 text-center text-slate-400">
+                <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                    <i class="fa-solid fa-magnifying-glass text-lg"></i>
+                </div>
+                <p class="font-bold text-sm text-slate-600 dark:text-slate-300">No se encontraron productos</p>
+                <p class="text-xs text-slate-400 mt-1">Prueba con otro término de búsqueda o selecciona otra categoría.</p>
+            </div>`;
+        return;
+    }
+
+    // Paginación virtualizada / por bloques (muestra los primeros N)
+    const itemsAMostrar = filtrados.slice(0, _posRenderLimit);
+    const fragment = document.createDocumentFragment();
+
+    itemsAMostrar.forEach(p => {
         const precioNum = parseFloat(p.precio) || 0;
         const stockNum = parseFloat(p.stock) || 0;
         const precioBs = usdToBs(precioNum);
@@ -2749,6 +2957,7 @@ function renderPOSProducts() {
         if (vencInfo && (vencInfo.status === 'critico' || vencInfo.status === 'vencido')) {
             vencBadge = `<span class="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded-md ${vencInfo.status === 'vencido' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}">${vencInfo.status === 'vencido' ? 'VENCIDO' : vencInfo.dias + 'd'}</span>`;
         }
+
         const c = document.createElement('div');
         c.className = "animated-card group bg-white/90 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/70 dark:border-slate-700/60 rounded-2xl p-4 cursor-pointer flex flex-col justify-between shadow-xs hover:shadow-md transition-all active:scale-[0.98]";
         c.onclick = () => {
@@ -2767,7 +2976,7 @@ function renderPOSProducts() {
 
         const imgBannerHtml = p.imagen ? `
             <div class="w-full h-24 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700/60 mb-2.5 relative flex items-center justify-center border border-slate-100 dark:border-slate-700/50">
-                <img src="${p.imagen}" alt="${p.nombre}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.parentElement.style.display='none';">
+                <img src="${p.imagen}" alt="${p.nombre}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onerror="this.parentElement.style.display='none';">
             </div>
         ` : '';
 
@@ -2790,14 +2999,31 @@ function renderPOSProducts() {
                 </div>
                 <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2.5 py-1 rounded-xl tabular-nums shrink-0">${stockNum.toFixed(1)} ${p.tipo}</span>
             </div>`;
-        grid.appendChild(c);
+        fragment.appendChild(c);
     });
 
-    // Si había una categoría seleccionada previamente, aplicarla al re-renderizar
-    if (currentPOSCategory !== 'Todos') {
-        filterPOSByCategory(encodeURIComponent(currentPOSCategory));
+    grid.appendChild(fragment);
+
+    // Botón de cargar más si hay productos pendientes
+    if (filtrados.length > _posRenderLimit) {
+        const moreContainer = document.createElement('div');
+        moreContainer.className = "col-span-full py-4 text-center";
+        moreContainer.innerHTML = `
+            <button type="button" onclick="cargarMasProductosPOS()" class="px-5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs shadow-xs transition-all">
+                <i class="fa-solid fa-angles-down mr-1"></i> Mostrando ${_posRenderLimit} de ${filtrados.length} productos · Cargar 60 más
+            </button>
+        `;
+        grid.appendChild(moreContainer);
     }
 }
+
+function cargarMasProductosPOS() {
+    _posRenderLimit += 60;
+    const searchVal = document.getElementById('search-pos')?.value || '';
+    renderPOSProductsConFiltro(normalizarTextoBusqueda(searchVal), currentPOSCategory);
+}
+window.cargarMasProductosPOS = cargarMasProductosPOS;
+
 
 // =====================================================
 // TICKET EN ESPERA (PARK / HOLD CART) & ATAJOS GLOBALES
@@ -6053,8 +6279,9 @@ function deleteSale(id) {
     });
 }
 
-function exportToExcel() {
-    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no cargada', 'error');
+async function exportToExcel() {
+    try { await ensureXLSX(); } catch(e) {}
+    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no disponible', 'error');
     if (!products || products.length === 0) return Swal.fire('Sin datos', 'No hay productos', 'info');
     const wsData = [
         ['REPORTE INVENTARIO - ' + (storeConfig.name || 'GESTIÓNPRO').toUpperCase()],
@@ -6171,8 +6398,9 @@ function handleExcelFileSelect(e) {
     }
 }
 
-function descargarPlantillaExcel() {
-    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no cargada', 'error');
+async function descargarPlantillaExcel() {
+    try { await ensureXLSX(); } catch(e) {}
+    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no disponible', 'error');
     const plantilla = [
         ['Código', 'Producto', 'Categoría', 'Marca', 'Tipo', 'Stock', 'Costo ($)', 'Precio ($)', 'Vencimiento'],
         ['759100100001', 'Harina PAN Blanca 1kg', 'Víveres', 'PAN', 'unid', 50, 1.15, 1.45, '2026-12-31'],
@@ -6375,14 +6603,17 @@ function parsearFilasExcel(rawRows) {
     return parsed;
 }
 
-function handleExcelFile(file) {
+async function handleExcelFile(file) {
     if (!file) return;
     const ext = file.name.split('.').pop().toLowerCase();
     if (!['xlsx', 'xls', 'csv'].includes(ext)) {
         return Swal.fire('Formato no soportado', 'Por favor selecciona un archivo .xlsx, .xls o .csv', 'warning');
     }
     if (typeof XLSX === 'undefined') {
-        return Swal.fire('Error', 'La librería SheetJS (XLSX) aún no está cargada.', 'error');
+        try { await ensureXLSX(); } catch(e) {}
+    }
+    if (typeof XLSX === 'undefined') {
+        return Swal.fire('Error', 'La librería SheetJS (XLSX) no está disponible.', 'error');
     }
 
     const reader = new FileReader();
@@ -8464,8 +8695,9 @@ function renderLibroVentas() {
     `).join('');
 }
 
-function exportarLibroVentasExcel() {
-    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no cargada', 'error');
+async function exportarLibroVentasExcel() {
+    try { await ensureXLSX(); } catch(e) {}
+    if (typeof XLSX === 'undefined') return Swal.fire('Error', 'Librería XLSX no disponible', 'error');
     if (libroVentasData.length === 0) return Swal.fire('Sin datos', 'No hay registros', 'info');
     const mesEl = document.getElementById('libro-mes');
     const anioEl = document.getElementById('libro-anio');
