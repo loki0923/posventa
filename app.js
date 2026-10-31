@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v1.1.2';
+const APP_VERSION = 'v1.1.3';
 
 function pintarVersionApp() {
     try {
@@ -624,7 +624,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         if (localStorage.getItem('pos_sidebar_collapsed') === '1' && window.innerWidth >= 768) {
             const s = document.getElementById('main-sidebar');
-            if (s) s.classList.add('collapsed');
+            if (s) {
+                s.classList.add('collapsed');
+                if (typeof syncSidebarToggleIcon === 'function') syncSidebarToggleIcon();
+            }
         }
     } catch(e) {}
 
@@ -1611,6 +1614,17 @@ function updatePOSDashboard() {
     if (elTop) elTop.textContent = topName;
 }
 
+function syncSidebarToggleIcon() {
+    const s = document.getElementById('main-sidebar');
+    const icon = document.getElementById('icon-toggle-sidebar');
+    if (!icon || !s) return;
+    if (s.classList.contains('collapsed')) {
+        icon.className = 'fa-solid fa-angles-right text-xs text-primary-500';
+    } else {
+        icon.className = 'fa-solid fa-bars text-xs';
+    }
+}
+
 function toggleSidebar() {
     const s = document.getElementById('main-sidebar');
     if (!s) return;
@@ -1620,6 +1634,7 @@ function toggleSidebar() {
         s.classList.toggle('collapsed');
         const isCollapsed = s.classList.contains('collapsed');
         try { localStorage.setItem('pos_sidebar_collapsed', isCollapsed ? '1' : '0'); } catch(e) {}
+        syncSidebarToggleIcon();
     }
 }
 

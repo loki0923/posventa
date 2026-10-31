@@ -96,6 +96,51 @@
             justify-content: center !important;
         }
 
+        /* Tooltips flotantes ultra-rápidos y modernos en modo mini */
+        #main-sidebar.collapsed .nav-item,
+        #main-sidebar.collapsed .btn-excel-sidebar {
+            position: relative;
+        }
+        #main-sidebar.collapsed .nav-item:hover::after,
+        #main-sidebar.collapsed .btn-excel-sidebar:hover::after {
+            content: attr(title);
+            position: absolute;
+            left: calc(100% + 14px);
+            top: 50%;
+            transform: translateY(-50%);
+            background: #0f172a;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 6px 12px;
+            border-radius: 12px;
+            white-space: nowrap;
+            box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.12);
+            pointer-events: none;
+            z-index: 999;
+            animation: fadeInTooltip 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeInTooltip {
+            from { opacity: 0; transform: translateY(-50%) translateX(-6px); }
+            to { opacity: 1; transform: translateY(-50%) translateX(0); }
+        }
+        html.dark #main-sidebar.collapsed .nav-item:hover::after,
+        html.dark #main-sidebar.collapsed .btn-excel-sidebar:hover::after {
+            background: #090d16;
+            color: #f1f5f9;
+            box-shadow: 0 14px 30px -4px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.16);
+        }
+
+        /* Indicador activo con resplandor en modo mini */
+        #main-sidebar.collapsed .nav-item.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(168, 85, 247, 0.16)) !important;
+            box-shadow: 0 0 16px rgba(99, 102, 241, 0.35) !important;
+        }
+        #main-sidebar.collapsed .nav-item.active i {
+            transform: scale(1.15);
+            transition: transform 0.2s var(--apple-spring);
+        }
+
         /* Densidad y escala compacta para laptops, pantallas POS y monitores con escala Windows */
         @media (max-width: 1366px), (max-height: 850px) {
             html {
@@ -561,7 +606,7 @@
             <!-- Header Tasas -->
             <header class="glass-header rounded-2xl px-3.5 md:px-5 py-2 mb-3 flex justify-between items-center z-20 gap-2 shrink-0 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
                 <div class="flex items-center gap-2.5 md:gap-3.5">
-                    <button onclick="toggleSidebar()" class="text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hidden md:flex bg-white/80 dark:bg-slate-800/80 w-9 h-9 rounded-full shadow-xs items-center justify-center transition-all active:scale-95 border border-slate-200/60 dark:border-slate-700/60" title="Alternar menú lateral"><i class="fa-solid fa-bars text-xs"></i></button>
+                    <button onclick="toggleSidebar()" id="btn-toggle-sidebar" class="text-slate-500 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hidden md:flex bg-white/80 dark:bg-slate-800/80 w-9 h-9 rounded-full shadow-xs items-center justify-center transition-all active:scale-95 border border-slate-200/60 dark:border-slate-700/60" title="Alternar menú lateral"><i id="icon-toggle-sidebar" class="fa-solid fa-bars text-xs"></i></button>
                     <button onclick="toggleTheme()" class="bg-white/80 dark:bg-slate-800/80 w-9 h-9 rounded-full shadow-xs flex items-center justify-center transition-all hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 border border-slate-200/60 dark:border-slate-700/60" title="Cambiar tema"><i id="theme-icon" class="fa-solid fa-moon text-slate-600 dark:text-amber-400 text-xs"></i></button>
                     
                     <!-- Branch Switcher (Selector de Sucursal para Dueño) -->
@@ -751,7 +796,7 @@
                             </div>
 
                             <!-- Products Grid -->
-                            <div id="pos-products-grid" class="grid grid-cols-2 md:grid-cols-3 gap-3.5 pb-8 content-start"></div>
+                            <div id="pos-products-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5 pb-8 content-start"></div>
                         </div>
                         
                         <!-- Ticket de Venta Column (Auto-adaptable, Sticky y Compacto) -->
@@ -3433,7 +3478,7 @@
          indexa por URL completa, así que una URL con query nueva es un fallo de
          caché y va a la red. Sin esto, un sw.js viejo sigue sirviendo el app.js
          viejo indefinidamente. Súbelo junto con CACHE_NAME en sw.js. -->
-    <script src="app.js?v=24"></script>
+    <script src="app.js?v=25"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
