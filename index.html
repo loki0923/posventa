@@ -55,52 +55,118 @@
             transition: width 0.28s var(--apple-ease), min-width 0.28s var(--apple-ease), padding 0.28s var(--apple-ease) !important;
         }
         #main-sidebar.collapsed {
-            width: 4.75rem !important;
-            min-width: 4.75rem !important;
+            width: 4.5rem !important;
+            min-width: 4.5rem !important;
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
         }
-        #main-sidebar.collapsed .sidebar-text {
+        #main-sidebar.collapsed span,
+        #main-sidebar.collapsed .sidebar-text,
+        #main-sidebar.collapsed [class*="sidebar-text"] {
             display: none !important;
         }
+        #main-sidebar.collapsed nav {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 0.35rem !important;
+        }
         #main-sidebar.collapsed .nav-item {
+            width: 42px !important;
+            height: 42px !important;
+            min-width: 42px !important;
+            min-height: 42px !important;
+            max-width: 42px !important;
+            max-height: 42px !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
+            border-radius: 14px !important;
+            display: flex !important;
+            align-items: center !important;
             justify-content: center !important;
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
             gap: 0 !important;
+            overflow: visible !important;
+            position: relative !important;
         }
         #main-sidebar.collapsed .nav-item > div {
+            display: flex !important;
+            align-items: center !important;
             justify-content: center !important;
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
             gap: 0 !important;
+        }
+        #main-sidebar.collapsed .nav-item i {
+            margin: 0 auto !important;
+            width: auto !important;
+            font-size: 1.15rem !important;
+            text-align: center !important;
+            display: inline-block !important;
+        }
+        #main-sidebar.collapsed #btn-torre-control {
+            background: transparent !important;
+            border-color: transparent !important;
+        }
+        #main-sidebar.collapsed #btn-torre-control:hover {
+            background-color: rgba(99, 102, 241, 0.15) !important;
+        }
+        #main-sidebar.collapsed #btn-torre-control.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(168, 85, 247, 0.16)) !important;
+            box-shadow: 0 0 16px rgba(99, 102, 241, 0.35) !important;
         }
         #main-sidebar.collapsed #sidebar-store-logo {
             margin: 0 auto !important;
         }
         #main-sidebar.collapsed .sidebar-header-box {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
             justify-content: center !important;
         }
-        #main-sidebar.collapsed .sidebar-user-box {
+        #main-sidebar.collapsed .sidebar-footer-box {
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
+            align-items: center !important;
+        }
+        #main-sidebar.collapsed .btn-excel-sidebar {
+            width: 42px !important;
+            height: 42px !important;
+            min-width: 42px !important;
+            min-height: 42px !important;
+            max-width: 42px !important;
+            max-height: 42px !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
+            border-radius: 14px !important;
+            display: flex !important;
+            align-items: center !important;
             justify-content: center !important;
-            padding: 0.4rem !important;
+            position: relative !important;
+        }
+        #main-sidebar.collapsed .sidebar-user-box {
+            width: 42px !important;
+            height: 42px !important;
+            min-width: 42px !important;
+            padding: 0 !important;
+            margin: 0 auto !important;
+            border-radius: 14px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: transparent !important;
+            border: none !important;
+        }
+        #main-sidebar.collapsed .sidebar-user-box > div {
+            margin: 0 auto !important;
         }
         #main-sidebar.collapsed .sidebar-user-actions {
             display: none !important;
         }
-        #main-sidebar.collapsed .sidebar-footer-box {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }
-        #main-sidebar.collapsed .btn-excel-sidebar {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-            justify-content: center !important;
-        }
 
         /* Tooltips flotantes ultra-rápidos y modernos en modo mini */
-        #main-sidebar.collapsed .nav-item,
-        #main-sidebar.collapsed .btn-excel-sidebar {
-            position: relative;
-        }
         #main-sidebar.collapsed .nav-item:hover::after,
         #main-sidebar.collapsed .btn-excel-sidebar:hover::after {
             content: attr(title);
@@ -553,12 +619,12 @@
             <!-- Navegación con Scroll Suave e Independiente -->
             <div class="overflow-y-auto flex-1 no-scrollbar py-3">
                 <nav class="flex flex-col gap-1.5 px-3">
-                    <button onclick="switchTab('torre-control')" id="btn-torre-control" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20">
+                    <button onclick="switchTab('torre-control')" id="btn-torre-control" title="Torre de Control" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20">
                         <div class="flex items-center gap-3">
                             <i class="fa-solid fa-tower-broadcast text-base w-6 text-center text-indigo-500"></i>
-                            <span class="hidden md:inline sidebar-text font-black text-indigo-600 dark:text-indigo-400">Torre de Control</span>
+                            <span class="sidebar-text font-black text-indigo-600 dark:text-indigo-400">Torre de Control</span>
                         </div>
-                        <span class="hidden md:inline text-[9px] bg-indigo-500 text-white font-black px-2 py-0.5 rounded-full shadow-xs">GLOBAL</span>
+                        <span class="sidebar-text text-[9px] bg-indigo-500 text-white font-black px-2 py-0.5 rounded-full shadow-xs">GLOBAL</span>
                     </button>
                     <button onclick="switchTab('ventas')" id="btn-ventas" title="Punto de Venta" class="nav-item active flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-cash-register text-base w-6 text-center text-primary-500"></i> <span class="hidden md:inline sidebar-text">Punto de Venta</span></button>
                     <button onclick="switchTab('cocina')" id="btn-cocina" title="Plancha / Cocina" class="hidden nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
@@ -3478,7 +3544,7 @@
          indexa por URL completa, así que una URL con query nueva es un fallo de
          caché y va a la red. Sin esto, un sw.js viejo sigue sirviendo el app.js
          viejo indefinidamente. Súbelo junto con CACHE_NAME en sw.js. -->
-    <script src="app.js?v=25"></script>
+    <script src="app.js?v=26"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
