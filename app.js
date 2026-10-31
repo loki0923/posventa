@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v1.1.4';
+const APP_VERSION = 'v27 · 31/10/2026 · bloque a: correccion tasa bcv y blindaje divisiones';
 
 function pintarVersionApp() {
     try {
@@ -45,8 +45,12 @@ function pintarVersionApp() {
 }
 
 // Variables Globales
-let rates = { bcv: 36.50, usdt: 38.10, eur: 39.20 };
-let autoRates = { bcv: 36.5, usdt: 38.0, eur: 39.0 };
+// Tasa inicial: SOLO la última tasa real guardada en este equipo. Si no hay
+// ninguna, queda en 0 ("sin tasa") en vez de inventar un valor: una tasa falsa
+// (antes 36,50) terminaba pintando precios en Bs equivocados en el POS.
+const _tasaGuardada = parseFloat(localStorage.getItem('pos_last_bcv_rate')) || 0;
+let rates = { bcv: _tasaGuardada, usdt: 0, eur: 0 };
+let autoRates = { bcv: _tasaGuardada, usdt: 0, eur: 0 };
 let products = [];
 let cart = [];
 let heldTicket = null;
@@ -231,7 +235,7 @@ function getBcvRate() {
     if (cached && !isNaN(cached) && cached > 0) {
         return cached;
     }
-    return autoRates.bcv || 1;
+    return Number(autoRates.bcv) > 0 ? autoRates.bcv : 0; // 0 = sin tasa disponible
 }
 
 // FUNCIÓN CENTRAL ÚNICA DE CONVERSIÓN USD -> BS
@@ -272,6 +276,20 @@ function formatBsFromUSD(montoUsd, tasaManual = null) {
 }
 
 window.getBcvRate = getBcvRate;
+// Bloquea operaciones de dinero cuando no hay tasa real (evita NaN/Infinity y cobros mal convertidos)
+function requireTasa() {
+    if (getBcvRate() > 0) return true;
+    if (typeof Swal !== 'undefined' && Swal.fire) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Falta la tasa BCV',
+            text: 'No hay una tasa disponible. Toca el lápiz junto a BCV para escribirla manualmente.',
+            confirmButtonText: 'Entendido'
+        });
+    }
+    return false;
+}
+window.requireTasa = requireTasa;
 window.usdToBs = usdToBs;
 window.bsToUsd = bsToUsd;
 window.formatBs = formatBs;
@@ -1693,11 +1711,15 @@ function pintarTasaUI() {
     const rateBcv = document.getElementById('rate-bcv');
     if (rateBcv) {
         const tasaActual = getBcvRate();
-        const formatted = formatBs(tasaActual);
-        const horaStr = rateMetadata.lastUpdated ? new Date(rateMetadata.lastUpdated).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '';
-        const modoStr = rateMetadata.isManual ? 'Manual' : 'Oficial';
-        const titleStr = `Tasa BCV (${modoStr})${horaStr ? ' · Act: ' + horaStr : ''}`;
-        rateBcv.innerHTML = `<span title="${titleStr}" class="cursor-pointer inline-flex items-center gap-1">${formatted}${rateMetadata.isManual ? ' <span class="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold px-1 rounded">M</span>' : ''}</span>`;
+        if (tasaActual <= 0) {
+            rateBcv.innerHTML = `<span title="Sin tasa BCV configurada. Toca el lápiz para ingresarla." class="cursor-pointer text-amber-500 dark:text-amber-400 font-black">Sin tasa</span>`;
+        } else {
+            const formatted = formatBs(tasaActual);
+            const horaStr = rateMetadata.lastUpdated ? new Date(rateMetadata.lastUpdated).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '';
+            const modoStr = rateMetadata.isManual ? 'Manual' : 'Oficial';
+            const titleStr = `Tasa BCV (${modoStr})${horaStr ? ' · Act: ' + horaStr : ''}`;
+            rateBcv.innerHTML = `<span title="${titleStr}" class="cursor-pointer inline-flex items-center gap-1">${formatted}${rateMetadata.isManual ? ' <span class="text-[9px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-bold px-1 rounded">M</span>' : ''}</span>`;
+        }
     }
     const rateUsdt = document.getElementById('rate-usdt');
     if (rateUsdt && rates.usdt) rateUsdt.textContent = formatBs(rates.usdt);
@@ -1789,6 +1811,7 @@ async function fetchRates() {
         pintarTasaUI();
         
         updateCartUI();
+        if (typeof renderPOSProducts === 'function') renderPOSProducts(); // FIX: las tarjetas del POS quedaban con la tasa inicial
         if (isAdmin) {
             renderInventory();
             renderReports();
@@ -3282,6 +3305,7 @@ function setupKeyboardShortcuts() {
 window.setupKeyboardShortcuts = setupKeyboardShortcuts;
 
 async function openVentaRapidaModal() {
+    if (!requireTasa()) return;
     const tasa = getBcvRate();
     
     const { value: formValues } = await Swal.fire({
@@ -3322,7 +3346,7 @@ async function openVentaRapidaModal() {
                 });
                 inBs.addEventListener('input', () => {
                     const b = parseFloat(inBs.value) || 0;
-                    inUsd.value = b > 0 ? (b / tasa).toFixed(2) : '';
+                    inUsd.value = (b > 0 && tasa > 0) ? (b / tasa).toFixed(2) : '';
                 });
             }
         },
@@ -4123,6 +4147,7 @@ async function canjearPuntos() {
 // =====================================================
 function openPaymentModal() {
     if (cart.length === 0) return Swal.fire('Ticket vacío', '', 'info');
+    if (!requireTasa()) return;
     puntosCanjeadosVenta = 0;
     saldoFavorAplicadoVenta = 0;
     selectedVueltoOption = 'efectivoUsd';
@@ -4204,7 +4229,7 @@ function autoFillRemaining(method) {
     const tasa = getBcvRate();
 
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
-    const totalUsdPagado = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
+    const totalUsdPagado = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + bsToUsd(totalBsPagados, tasa));
     const faltaUsd = roundMoney(currentSaleTotal - totalUsdPagado);
 
     if (faltaUsd <= 0.001) return;
@@ -4451,7 +4476,7 @@ function copiarDatosPagoMovilVuelto() {
     const bsPunto = parseFloat(document.getElementById('pay-punto-bs').value) || 0;
     const bsPMovil = parseFloat(document.getElementById('pay-pago-movil-bs').value) || 0;
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
-    const totalUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
+    const totalUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + bsToUsd(totalBsPagados, tasa));
     const diff = roundMoney(totalUsd - currentSaleTotal);
     const montoBs = roundMoney(diff * tasa).toFixed(2);
 
@@ -4494,7 +4519,7 @@ function notificarVueltoPagoMovilWhatsApp() {
     const bsPunto = parseFloat(document.getElementById('pay-punto-bs').value) || 0;
     const bsPMovil = parseFloat(document.getElementById('pay-pago-movil-bs').value) || 0;
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
-    const totalUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
+    const totalUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + bsToUsd(totalBsPagados, tasa));
     const diff = roundMoney(totalUsd - currentSaleTotal);
     const montoBs = roundMoney(diff * tasa).toFixed(2);
     const storeName = storeConfig?.name || 'Mi Negocio';
@@ -4637,7 +4662,7 @@ function calculateChange() {
 
     const tasa = getBcvRate();
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
-    const totalUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
+    const totalUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + bsToUsd(totalBsPagados, tasa));
     const diff = roundMoney(totalUsd - currentSaleTotal);
     const sBox = document.getElementById('pay-status-box');
     const btn = document.getElementById('btn-confirm-sale');
@@ -4731,7 +4756,7 @@ async function confirmSale() {
 
     const tasa = getBcvRate();
     const totalBsPagados = bsEfectivo + bsPunto + bsPMovil;
-    const totalPagadoUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + (totalBsPagados / tasa));
+    const totalPagadoUsd = roundMoney(usdEfectivo + usdZelle + saldoFavorAplicadoVenta + bsToUsd(totalBsPagados, tasa));
     const vueltoUsd = roundMoney(totalPagadoUsd > currentSaleTotal ? totalPagadoUsd - currentSaleTotal : 0);
 
     // Validación: si eligió guardar Saldo a Favor pero no hay cliente asignado
@@ -5569,6 +5594,7 @@ function cerrarCaja() {
 }
 
 function abrirModalArqueo30Seg() {
+    if (!requireTasa()) return;
     const modal = document.getElementById('arqueo-modal');
     const content = document.getElementById('arqueo-modal-content');
     if (!modal) return;
@@ -5623,7 +5649,7 @@ function abrirModalArqueo30Seg() {
     const ventasContado = tVentasUsd - tFiadosUsd;
     const utilNeta = (ventasContado - (tVentasUsd - tGananciaBruta)) - tGastosUsd - mermasTotal;
 
-    const totalEsperadoConsolidadoUsd = espEfUsd + espZelleUsd + (espEfBs / tasa) + (espPuntoBs / tasa) + (espPMBs / tasa);
+    const totalEsperadoConsolidadoUsd = espEfUsd + espZelleUsd + bsToUsd(espEfBs, tasa) + bsToUsd(espPuntoBs, tasa) + bsToUsd(espPMBs, tasa);
 
     arqueoEsperado = {
         efectivoUsd: roundMoney(espEfUsd),
@@ -5641,11 +5667,11 @@ function abrirModalArqueo30Seg() {
     const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setEl('arq-esp-usd', `$${arqueoEsperado.efectivoUsd.toFixed(2)}`);
     setEl('arq-esp-bs', `Bs ${arqueoEsperado.efectivoBs.toFixed(2)}`);
-    setEl('arq-esp-bs-usd', `($${(arqueoEsperado.efectivoBs / tasa).toFixed(2)})`);
+    setEl('arq-esp-bs-usd', `(${formatUSD(bsToUsd(arqueoEsperado.efectivoBs, tasa))})`);
     setEl('arq-esp-punto', `Bs ${arqueoEsperado.puntoBs.toFixed(2)}`);
-    setEl('arq-esp-punto-usd', `($${(arqueoEsperado.puntoBs / tasa).toFixed(2)})`);
+    setEl('arq-esp-punto-usd', `(${formatUSD(bsToUsd(arqueoEsperado.puntoBs, tasa))})`);
     setEl('arq-esp-pm', `Bs ${arqueoEsperado.pagoMovilBs.toFixed(2)}`);
-    setEl('arq-esp-pm-usd', `($${(arqueoEsperado.pagoMovilBs / tasa).toFixed(2)})`);
+    setEl('arq-esp-pm-usd', `(${formatUSD(bsToUsd(arqueoEsperado.pagoMovilBs, tasa))})`);
     setEl('arq-esp-zelle', `$${arqueoEsperado.zelleUsd.toFixed(2)}`);
     setEl('arq-esp-total-usd', `$${arqueoEsperado.totalUsd.toFixed(2)}`);
     setEl('arq-tasa-indicador', `Tasa BCV: Bs ${tasa.toFixed(2)}`);
@@ -5716,7 +5742,7 @@ function calcularDiferenciasArqueo() {
     const fisPM = parseFloat(document.getElementById('arq-fis-pm')?.value) || 0;
     const fisZelle = parseFloat(document.getElementById('arq-fis-zelle')?.value) || 0;
 
-    const totalFisicoUsd = fisUsd + fisZelle + (fisBs / tasa) + (fisPunto / tasa) + (fisPM / tasa);
+    const totalFisicoUsd = fisUsd + fisZelle + bsToUsd(fisBs, tasa) + bsToUsd(fisPunto, tasa) + bsToUsd(fisPM, tasa);
     const difTotalUsd = roundMoney(totalFisicoUsd - arqueoEsperado.totalUsd);
     const difTotalBs = roundMoney(difTotalUsd * tasa);
 
@@ -5772,7 +5798,7 @@ function imprimirArqueoCorteZ() {
     const fisZelle = parseFloat(document.getElementById('arq-fis-zelle')?.value) || 0;
     const obs = document.getElementById('arq-observaciones')?.value || '';
 
-    const totalFisUsd = fisUsd + fisZelle + (fisBs / tasa) + (fisPunto / tasa) + (fisPM / tasa);
+    const totalFisUsd = fisUsd + fisZelle + bsToUsd(fisBs, tasa) + bsToUsd(fisPunto, tasa) + bsToUsd(fisPM, tasa);
     const difUsd = roundMoney(totalFisUsd - arqueoEsperado.totalUsd);
 
     const fecha = new Date().toLocaleString('es-VE');
@@ -5845,7 +5871,7 @@ function enviarArqueoWhatsApp() {
     const fisZelle = parseFloat(document.getElementById('arq-fis-zelle')?.value) || 0;
     const obs = document.getElementById('arq-observaciones')?.value || '';
 
-    const totalFisUsd = fisUsd + fisZelle + (fisBs / tasa) + (fisPunto / tasa) + (fisPM / tasa);
+    const totalFisUsd = fisUsd + fisZelle + bsToUsd(fisBs, tasa) + bsToUsd(fisPunto, tasa) + bsToUsd(fisPM, tasa);
     const difUsd = roundMoney(totalFisUsd - arqueoEsperado.totalUsd);
     const estadoCuadre = Math.abs(difUsd) < 0.05 ? '✅ CUADRE PERFECTO' : (difUsd > 0 ? `🟢 SOBRANTE (+$${difUsd.toFixed(2)})` : `🔴 FALTANTE (-$${Math.abs(difUsd).toFixed(2)})`);
 
@@ -5905,7 +5931,7 @@ async function confirmarCierreArqueo() {
     const fisZelle = parseFloat(document.getElementById('arq-fis-zelle')?.value) || 0;
     const obs = document.getElementById('arq-observaciones')?.value || '';
 
-    const totalFisUsd = fisUsd + fisZelle + (fisBs / tasa) + (fisPunto / tasa) + (fisPM / tasa);
+    const totalFisUsd = fisUsd + fisZelle + bsToUsd(fisBs, tasa) + bsToUsd(fisPunto, tasa) + bsToUsd(fisPM, tasa);
     const difUsd = roundMoney(totalFisUsd - arqueoEsperado.totalUsd);
 
     const btn = document.getElementById('btn-confirmar-arqueo');
@@ -10018,7 +10044,7 @@ function obtenerMetricasSucursal(branch) {
 function renderTorreControl() {
     if (!isAdmin) return;
 
-    const rate = Number(autoRates.bcv) || 36.5;
+    const rate = getBcvRate();
     const branchMetrics = holdingBranches.map(b => obtenerMetricasSucursal(b));
 
     // El consolidado suma SOLO las sucursales cuyos datos se pueden leer de
@@ -11357,17 +11383,17 @@ function ejecutarCargaCarritoPOS(pedido) {
     const faltantes = [];
 
     (pedido.items || []).forEach(item => {
-        const cant = Math.max(1, parseInt(item.qty) || 1);
         const nombreItem = String(item.nombre || '').trim();
 
-        // Búsqueda tolerante: antes hacía `x.nombre.toLowerCase()` sin
-        // comprobar, así que un producto sin nombre lanzaba TypeError y tumbaba
-        // TODA la carga del pedido.
         const pInv = products.find(x => {
             if (item.id && x.id === item.id) return true;
             const nombreProd = String(x.nombre || '').trim().toLowerCase();
             return nombreProd !== '' && nombreProd === nombreItem.toLowerCase();
         });
+
+        const isItemPeso = ['kg', 'peso'].includes(String(item.tipo || '').toLowerCase().trim()) || (pInv && ['kg', 'peso'].includes(String(pInv.tipo || '').toLowerCase().trim()));
+        const cant = isItemPeso ? (parseFloat(item.qty) || 0) : Math.max(1, parseInt(item.qty) || 1);
+
 
         if (pInv) {
             // Se carga el producto COMPLETO, igual que addToCart(): así el
@@ -11386,7 +11412,7 @@ function ejecutarCargaCarritoPOS(pedido) {
                 nombre: nombreItem || 'Producto del pedido web',
                 precio: parseFloat(item.precio) || 0,
                 costo: null,            // desconocido: no se inventa
-                tipo: 'unidad',
+                tipo: isItemPeso ? 'kg' : 'unidad',
                 qty: cant,
                 iva: false,
                 noInventario: true

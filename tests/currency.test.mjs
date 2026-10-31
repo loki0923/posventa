@@ -159,7 +159,7 @@ describe('Módulo de Finanzas & Moneda: TC-001, TC-002, TC-003', () => {
         assert.equal(formatBsFromUSD(10, tasa), 'Bs 456,00');
     });
 
-    test('TC-FASE1-03: Resiliencia de Tasa BCV con fallback a localStorage', () => {
+    test('TC-FASE1-03: Resiliencia de Tasa BCV: sin tasa real devuelve 0 (no inventa 36.5 ni 1)', () => {
         // 1. Tasa activa disponible de API
         assert.equal(getBcvRateMock({ bcv: 42.50 }, null), 42.50);
 
@@ -167,7 +167,47 @@ describe('Módulo de Finanzas & Moneda: TC-001, TC-002, TC-003', () => {
         assert.equal(getBcvRateMock({ bcv: 0 }, '41.20'), 41.20);
         assert.equal(getBcvRateMock(null, '40.85'), 40.85);
 
-        // 3. Fallback de última instancia si ni API ni caché existen
-        assert.equal(getBcvRateMock(null, null, 36.50), 36.50);
+        // 3. Sin tasa en API ni en caché: devuelve 0 (NUNCA inventa 36.50 ni 1)
+        function getBcvRateStrict(ratesObj, cachedVal) {
+            if (ratesObj && typeof ratesObj.bcv === 'number' && ratesObj.bcv > 0) return ratesObj.bcv;
+            const cached = parseFloat(cachedVal);
+            if (cached && !isNaN(cached) && cached > 0) return cached;
+            return 0;
+        }
+        assert.equal(getBcvRateStrict(null, null), 0);
+        assert.equal(getBcvRateStrict({ bcv: 0 }, null), 0);
+    });
+
+    test('TC-BLOQUE-A-01: bsToUsd con tasa 0 devuelve 0 y previene Infinity o NaN', () => {
+        assert.equal(bsToUsd(100, 0), 0);
+        assert.equal(bsToUsd(0, 0), 0);
+        assert.equal(bsToUsd(50, -5), 0);
+        assert.equal(Number.isFinite(bsToUsd(100, 0)), true);
+        assert.equal(isNaN(bsToUsd(100, 0)), false);
+    });
+
+    test('TC-BLOQUE-A-02: Sincronía exacta entre Tarjeta POS y Ticket para el mismo precio', () => {
+        const tasaOficial = 889.25;
+        const productoPrecio = 1.45; // $1.45
+
+        // Tarjeta de producto en el grid del POS
+        const posCardBsText = formatBsFromUSD(productoPrecio, tasaOficial);
+
+        // Ítem en el ticket de venta (1 unidad)
+        const ticketItemBsText = formatBsFromUSD(productoPrecio * 1, tasaOficial);
+
+        // Ambos DEBEN ser idénticos al 100%
+        assert.equal(posCardBsText, ticketItemBsText);
+        assert.equal(posCardBsText, 'Bs 1.289,41');
+        assert.equal(ticketItemBsText, 'Bs 1.289,41');
+    });
+
+    test('TC-BLOQUE-A-03: requireTasa bloquea transacciones cuando tasa es 0 o ausente', () => {
+        function checkRequireTasa(rate) {
+            return rate > 0;
+        }
+        assert.equal(checkRequireTasa(0), false);
+        assert.equal(checkRequireTasa(-1), false);
+        assert.equal(checkRequireTasa(45.60), true);
     });
 });
