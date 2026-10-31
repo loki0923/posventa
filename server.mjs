@@ -29,6 +29,13 @@ const server = http.createServer((req, res) => {
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
         let pathname = decodeURIComponent(parsedUrl.pathname);
 
+        if (pathname === '/api/config') {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({
+                demoMode: process.env.DEMO_MODE === 'true'
+            }));
+        }
+
         if (pathname === '/' || pathname === '') {
             pathname = '/index.html';
         }

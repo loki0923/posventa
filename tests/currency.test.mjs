@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-// Helper idéntico al implementado en app.js
+// Helpers idénticos a los implementados en app.js para Fase 1
 function roundMoney(num) {
     return Math.round((Number(num || 0) + Number.EPSILON) * 100) / 100;
 }
@@ -25,6 +25,50 @@ function calculateChange({ totalUsd, pagadoUsd = 0, pagadoBs = 0, rateBcv = 36.5
     }
 
     return { isComplete: true, pendingUsd: 0, change: diferenciaUsd, changeCurrency: 'USD' };
+}
+
+const bsFormatter = new Intl.NumberFormat('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+});
+
+const usdFormatter = new Intl.NumberFormat('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+});
+
+function formatBs(monto) {
+    const num = roundMoney(Number(monto || 0));
+    return `Bs ${bsFormatter.format(num)}`;
+}
+
+function formatUSD(monto) {
+    const num = roundMoney(Number(monto || 0));
+    return `$${usdFormatter.format(num)}`;
+}
+
+function getBcvRateMock(rates, cachedRate, fallbackRate = 36.5) {
+    if (rates && typeof rates.bcv === 'number' && rates.bcv > 0) {
+        return rates.bcv;
+    }
+    const cached = parseFloat(cachedRate);
+    if (cached && !isNaN(cached) && cached > 0) {
+        return cached;
+    }
+    return fallbackRate;
+}
+
+function usdToBs(montoUsd, tasa) {
+    return roundMoney(Number(montoUsd || 0) * tasa);
+}
+
+function bsToUsd(montoBs, tasa) {
+    if (tasa <= 0) return 0;
+    return roundMoney(Number(montoBs || 0) / tasa);
+}
+
+function formatBsFromUSD(montoUsd, tasa) {
+    return formatBs(usdToBs(montoUsd, tasa));
 }
 
 describe('Módulo de Finanzas & Moneda: TC-001, TC-002, TC-003', () => {
@@ -93,5 +137,37 @@ describe('Módulo de Finanzas & Moneda: TC-001, TC-002, TC-003', () => {
         assert.equal(resultado.isComplete, false);
         assert.equal(resultado.pendingUsd, 20.00);
         assert.equal(resultado.change, 0);
+    });
+
+    test('TC-FASE1-01: Formato monetario es-VE (Coma decimal y Punto de miles)', () => {
+        // En es-VE, 1.45 se formatea como 1,45 y 1289.42 como 1.289,42
+        assert.equal(formatUSD(1.45), '$1,45');
+        assert.equal(formatUSD(1289.42), '$1.289,42');
+        assert.equal(formatUSD(0), '$0,00');
+
+        assert.equal(formatBs(1.45), 'Bs 1,45');
+        assert.equal(formatBs(1289.42), 'Bs 1.289,42');
+        assert.equal(formatBs(0), 'Bs 0,00');
+    });
+
+    test('TC-FASE1-02: Conversión centralizada usdToBs y bsToUsd', () => {
+        const tasa = 45.60;
+        assert.equal(usdToBs(10, tasa), 456.00);
+        assert.equal(usdToBs(2.50, tasa), 114.00);
+        assert.equal(bsToUsd(456, tasa), 10.00);
+        assert.equal(bsToUsd(114, tasa), 2.50);
+        assert.equal(formatBsFromUSD(10, tasa), 'Bs 456,00');
+    });
+
+    test('TC-FASE1-03: Resiliencia de Tasa BCV con fallback a localStorage', () => {
+        // 1. Tasa activa disponible de API
+        assert.equal(getBcvRateMock({ bcv: 42.50 }, null), 42.50);
+
+        // 2. Falla API (null/0), fallback a caché localStorage
+        assert.equal(getBcvRateMock({ bcv: 0 }, '41.20'), 41.20);
+        assert.equal(getBcvRateMock(null, '40.85'), 40.85);
+
+        // 3. Fallback de última instancia si ni API ni caché existen
+        assert.equal(getBcvRateMock(null, null, 36.50), 36.50);
     });
 });
