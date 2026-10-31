@@ -50,6 +50,52 @@
             --apple-ease: cubic-bezier(0.16, 1, 0.3, 1);
         }
 
+        /* Barra lateral colapsable / minimizable (Modo Mini / Solo Iconos) */
+        #main-sidebar {
+            transition: width 0.28s var(--apple-ease), min-width 0.28s var(--apple-ease), padding 0.28s var(--apple-ease) !important;
+        }
+        #main-sidebar.collapsed {
+            width: 4.75rem !important;
+            min-width: 4.75rem !important;
+        }
+        #main-sidebar.collapsed .sidebar-text {
+            display: none !important;
+        }
+        #main-sidebar.collapsed .nav-item {
+            justify-content: center !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            gap: 0 !important;
+        }
+        #main-sidebar.collapsed .nav-item > div {
+            justify-content: center !important;
+            gap: 0 !important;
+        }
+        #main-sidebar.collapsed #sidebar-store-logo {
+            margin: 0 auto !important;
+        }
+        #main-sidebar.collapsed .sidebar-header-box {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            justify-content: center !important;
+        }
+        #main-sidebar.collapsed .sidebar-user-box {
+            justify-content: center !important;
+            padding: 0.4rem !important;
+        }
+        #main-sidebar.collapsed .sidebar-user-actions {
+            display: none !important;
+        }
+        #main-sidebar.collapsed .sidebar-footer-box {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        #main-sidebar.collapsed .btn-excel-sidebar {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            justify-content: center !important;
+        }
+
         /* Densidad y escala compacta para laptops, pantallas POS y monitores con escala Windows */
         @media (max-width: 1366px), (max-height: 850px) {
             html {
@@ -444,11 +490,11 @@
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div id="app-container" class="hidden flex h-full w-full">
-        <aside id="main-sidebar" class="w-20 md:w-60 my-2.5 ml-2.5 h-[calc(100vh-1.25rem)] glass-panel rounded-[1.75rem] flex flex-col justify-between hidden md:flex z-10 relative overflow-hidden transition-all duration-300 border border-white/70 dark:border-white/10 shadow-lg shrink-0">
+        <aside id="main-sidebar" class="w-60 my-2.5 ml-2.5 h-[calc(100vh-1.25rem)] glass-panel rounded-[1.75rem] flex flex-col justify-between hidden md:flex z-10 relative overflow-hidden transition-all duration-300 border border-white/70 dark:border-white/10 shadow-lg shrink-0">
             <div class="absolute -top-24 -left-24 w-48 h-48 bg-primary-500/20 rounded-full blur-3xl pointer-events-none"></div>
             
             <!-- Header Fijo de la Barra Lateral (Nunca se desborda ni se pierde al hacer scroll) -->
-            <div class="p-4 sm:p-4.5 flex items-center justify-center border-b border-slate-200/60 dark:border-slate-800/80 shrink-0">
+            <div class="sidebar-header-box p-4 sm:p-4.5 flex items-center justify-center border-b border-slate-200/60 dark:border-slate-800/80 shrink-0">
                 <div class="flex items-center gap-3 w-full px-1">
                     <div id="sidebar-store-logo" class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-primary-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md shadow-primary-500/30 min-w-[40px] overflow-hidden shrink-0"><i class="fa-solid fa-bolt text-base"></i></div>
                     <div class="hidden md:block sidebar-text overflow-hidden flex-1 min-w-0">
@@ -469,32 +515,32 @@
                         </div>
                         <span class="hidden md:inline text-[9px] bg-indigo-500 text-white font-black px-2 py-0.5 rounded-full shadow-xs">GLOBAL</span>
                     </button>
-                    <button onclick="switchTab('ventas')" id="btn-ventas" class="nav-item active flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-cash-register text-base w-6 text-center text-primary-500"></i> <span class="hidden md:inline sidebar-text">Punto de Venta</span></button>
-                    <button onclick="switchTab('cocina')" id="btn-cocina" class="hidden nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
+                    <button onclick="switchTab('ventas')" id="btn-ventas" title="Punto de Venta" class="nav-item active flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-cash-register text-base w-6 text-center text-primary-500"></i> <span class="hidden md:inline sidebar-text">Punto de Venta</span></button>
+                    <button onclick="switchTab('cocina')" id="btn-cocina" title="Plancha / Cocina" class="hidden nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
                         <div class="flex items-center gap-3"><i class="fa-solid fa-fire-burner text-base w-6 text-center text-orange-500"></i> <span class="hidden md:inline sidebar-text">Plancha / Cocina</span></div>
-                        <span id="badge-cocina" class="hidden bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
+                        <span id="badge-cocina" class="sidebar-text hidden bg-orange-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
                     </button>
-                    <button onclick="switchTab('fiados')" id="btn-fiados" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
+                    <button onclick="switchTab('fiados')" id="btn-fiados" title="Cuaderno Fiados" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
                         <div class="flex items-center gap-3"><i class="fa-solid fa-book-bookmark text-base w-6 text-center text-amber-500"></i> <span class="hidden md:inline sidebar-text">Cuaderno Fiados</span></div>
-                        <span id="badge-fiados" class="hidden bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
+                        <span id="badge-fiados" class="sidebar-text hidden bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
                     </button>
-                    <button onclick="switchTab('clientes')" id="btn-clientes" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-address-book text-base w-6 text-center text-sky-500"></i> <span class="hidden md:inline sidebar-text">Clientes</span></button>
-                    <button onclick="switchTab('inventario')" id="btn-inventario" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
+                    <button onclick="switchTab('clientes')" id="btn-clientes" title="Clientes" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-address-book text-base w-6 text-center text-sky-500"></i> <span class="hidden md:inline sidebar-text">Clientes</span></button>
+                    <button onclick="switchTab('inventario')" id="btn-inventario" title="Inventario" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm">
                         <div class="flex items-center gap-3"><i class="fa-solid fa-boxes-stacked text-base w-6 text-center text-amber-500"></i> <span class="hidden md:inline sidebar-text">Inventario</span></div>
-                        <span id="badge-stock" class="hidden bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
+                        <span id="badge-stock" class="sidebar-text hidden bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full ml-auto shadow-xs">0</span>
                     </button>
-                    <button onclick="switchTab('compras')" id="btn-compras" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-truck-fast text-base w-6 text-center text-teal-500"></i> <span class="hidden md:inline sidebar-text">Compras</span></button>
-                    <button onclick="switchTab('mermas')" id="btn-mermas" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-scale-unbalanced text-base w-6 text-center text-rose-500"></i> <span class="hidden md:inline sidebar-text">Mermas</span></button>
-                    <button onclick="switchTab('reportes')" id="btn-reportes" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-chart-pie text-base w-6 text-center text-violet-500"></i> <span class="hidden md:inline sidebar-text">Reportes & Cierre</span></button>
-                    <button onclick="openLibroVentasModal()" id="btn-libro-fiscal" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-file-invoice-dollar text-base w-6 text-center text-indigo-500"></i> <span class="hidden md:inline sidebar-text">Libro de Ventas</span></div> <span class="hidden md:inline text-[9px] bg-slate-500/10 text-slate-600 dark:text-slate-400 font-black px-2 py-0.5 rounded-full border border-slate-500/20">Referencial</span></button>
-                    <button onclick="openTiendaOnlineModal()" id="btn-tienda-online" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-globe text-base w-6 text-center text-emerald-500"></i> <span class="hidden md:inline sidebar-text">Tienda Online</span></div> <span class="hidden md:inline text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black px-2 py-0.5 rounded-full border border-emerald-500/20">Web</span></button>
-                    <button onclick="switchTab('usuarios')" id="btn-usuarios" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-users text-base w-6 text-center text-fuchsia-500"></i> <span class="hidden md:inline sidebar-text">Usuarios</span></button>
+                    <button onclick="switchTab('compras')" id="btn-compras" title="Compras" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-truck-fast text-base w-6 text-center text-teal-500"></i> <span class="hidden md:inline sidebar-text">Compras</span></button>
+                    <button onclick="switchTab('mermas')" id="btn-mermas" title="Mermas" class="nav-item flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-scale-unbalanced text-base w-6 text-center text-rose-500"></i> <span class="hidden md:inline sidebar-text">Mermas</span></button>
+                    <button onclick="switchTab('reportes')" id="btn-reportes" title="Reportes & Cierre" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-chart-pie text-base w-6 text-center text-violet-500"></i> <span class="hidden md:inline sidebar-text">Reportes & Cierre</span></button>
+                    <button onclick="openLibroVentasModal()" id="btn-libro-fiscal" title="Libro de Ventas" class="nav-item admin-only flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-file-invoice-dollar text-base w-6 text-center text-indigo-500"></i> <span class="hidden md:inline sidebar-text">Libro de Ventas</span></div> <span class="sidebar-text text-[9px] bg-slate-500/10 text-slate-600 dark:text-slate-400 font-black px-2 py-0.5 rounded-full border border-slate-500/20">Referencial</span></button>
+                    <button onclick="openTiendaOnlineModal()" id="btn-tienda-online" title="Tienda Online" class="nav-item flex items-center justify-between w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><div class="flex items-center gap-3"><i class="fa-solid fa-globe text-base w-6 text-center text-emerald-500"></i> <span class="hidden md:inline sidebar-text">Tienda Online</span></div> <span class="sidebar-text text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-black px-2 py-0.5 rounded-full border border-emerald-500/20">Web</span></button>
+                    <button onclick="switchTab('usuarios')" id="btn-usuarios" title="Usuarios" class="nav-item admin-only flex items-center gap-3 w-full text-left px-3.5 py-3 rounded-2xl font-bold text-slate-700 dark:text-slate-300 text-sm"><i class="fa-solid fa-users text-base w-6 text-center text-fuchsia-500"></i> <span class="hidden md:inline sidebar-text">Usuarios</span></button>
                 </nav>
             </div>
             
-            <div class="p-3.5 flex flex-col gap-2 shrink-0 border-t border-slate-200/50 dark:border-slate-800/80">
-                <button onclick="exportToExcel()" class="admin-only w-full bg-white/70 dark:bg-slate-800/70 hover:bg-white dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-200 py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all active:scale-98"><i class="fa-solid fa-file-excel text-emerald-500"></i> <span class="hidden md:inline sidebar-text">Exportar Excel</span></button>
-                <div class="flex items-center justify-between p-2 bg-slate-100/70 dark:bg-slate-800/60 rounded-2xl border border-slate-200/50 dark:border-slate-700/50">
+            <div class="sidebar-footer-box p-3.5 flex flex-col gap-2 shrink-0 border-t border-slate-200/50 dark:border-slate-800/80">
+                <button onclick="exportToExcel()" title="Exportar a Excel" class="btn-excel-sidebar admin-only w-full bg-white/70 dark:bg-slate-800/70 hover:bg-white dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-200 py-2.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all active:scale-98"><i class="fa-solid fa-file-excel text-emerald-500"></i> <span class="hidden md:inline sidebar-text">Exportar Excel</span></button>
+                <div class="sidebar-user-box flex items-center justify-between p-2 bg-slate-100/70 dark:bg-slate-800/60 rounded-2xl border border-slate-200/50 dark:border-slate-700/50">
                     <div class="flex items-center gap-2.5 overflow-hidden">
                         <div class="w-8 h-8 rounded-xl bg-primary-100 dark:bg-primary-950 text-primary-600 dark:text-primary-400 flex items-center justify-center text-xs font-black min-w-[32px] border border-primary-200/50 dark:border-primary-800/50"><i class="fa-solid fa-user"></i></div>
                         <div class="hidden md:block overflow-hidden sidebar-text">
@@ -502,7 +548,7 @@
                             <p id="user-display" class="text-xs font-black text-slate-800 dark:text-slate-200 truncate w-24"><span class="inline-block w-16 h-3 bg-slate-200 dark:bg-slate-700 animate-pulse rounded"></span></p>
                         </div>
                     </div>
-                    <div class="flex items-center">
+                    <div class="flex items-center sidebar-user-actions">
                         <button onclick="openSettingsModal()" title="Configuración" class="admin-only text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 p-2 transition-colors"><i class="fa-solid fa-gear text-sm"></i></button>
                         <button onclick="cerrarSesion()" title="Cerrar Sesión" class="text-rose-500 hover:text-rose-600 p-2 transition-colors"><i class="fa-solid fa-right-from-bracket text-sm"></i></button>
                     </div>
@@ -3387,7 +3433,7 @@
          indexa por URL completa, así que una URL con query nueva es un fallo de
          caché y va a la red. Sin esto, un sw.js viejo sigue sirviendo el app.js
          viejo indefinidamente. Súbelo junto con CACHE_NAME en sw.js. -->
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=24"></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

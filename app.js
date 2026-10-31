@@ -30,7 +30,7 @@ const secondaryAuth = secondaryApp.auth();
 // index.html— en cada despliegue que toque app.js. Si no, es imposible
 // distinguir "no se aplicó el cambio" de "el navegador sirve lo viejo".
 // =====================================================
-const APP_VERSION = 'v1.1.1';
+const APP_VERSION = 'v1.1.2';
 
 function pintarVersionApp() {
     try {
@@ -621,6 +621,12 @@ window.checkDemoMode = checkDemoMode;
 document.addEventListener('DOMContentLoaded', () => {
     // Lo primero: dejar constancia de qué versión se está ejecutando.
     pintarVersionApp();
+    try {
+        if (localStorage.getItem('pos_sidebar_collapsed') === '1' && window.innerWidth >= 768) {
+            const s = document.getElementById('main-sidebar');
+            if (s) s.classList.add('collapsed');
+        }
+    } catch(e) {}
 
     if (localStorage.getItem('theme') === 'dark') {
         document.documentElement.classList.add('dark');
@@ -1607,13 +1613,14 @@ function updatePOSDashboard() {
 
 function toggleSidebar() {
     const s = document.getElementById('main-sidebar');
-    s.classList.toggle('md:w-64');
-    s.classList.toggle('md:w-20');
-    document.querySelectorAll('span.sidebar-text').forEach(el => el.classList.toggle('md:inline'));
-    const h1 = document.querySelector('h1.sidebar-text');
-    if (h1) h1.classList.toggle('md:block');
-    const userDiv = document.querySelector('div.sidebar-text');
-    if (userDiv) userDiv.classList.toggle('md:block');
+    if (!s) return;
+    if (window.innerWidth < 768) {
+        s.classList.toggle('hidden');
+    } else {
+        s.classList.toggle('collapsed');
+        const isCollapsed = s.classList.contains('collapsed');
+        try { localStorage.setItem('pos_sidebar_collapsed', isCollapsed ? '1' : '0'); } catch(e) {}
+    }
 }
 
 function switchTab(tabId) {
